@@ -1,0 +1,62 @@
+---
+# Deploy role — Clone repo, configure .env, start services
+
+- name: Create deploy directory
+  file:
+    path: "{{ deploy_dir }}"
+    state: directory
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    mode: "0755"
+
+- name: Clone or update indiekit-deploy repo
+  git:
+    repo: "{{ repo_url }}"
+    dest: "{{ deploy_dir }}"
+    version: "{{ repo_branch }}"
+    force: false
+  become_user: "{{ deploy_user }}"
+
+- name: Initialize git submodules
+  command: git submodule update --init --recursive
+  args:
+    chdir: "{{ deploy_dir }}"
+  become_user: "{{ deploy_user }}"
+
+- name: Template .env file
+  template:
+    src: env.j2
+    dest: "{{ deploy_dir }}/.env"
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    mode: "0600"
+
+- name: Build and start services (core profile)
+  command: docker compose up -d --build
+  args:
+    chdir: "{{ deploy_dir }}"
+  when: compose_profile == "core"
+  become_user: "{{ deploy_user }}"
+
+- name: Build and start services (full profile)
+  command: docker compose -f docker-compose.yml -f docker-compose.full.yml up -d --build
+  args:
+    chdir: "{{ deploy_dir }}"
+  when: compose_profile == "full"
+  become_user: "{{ deploy_user }}"
+
+- name: Wait for Indiekit to be healthy
+  uri:
+    url: "http://localhost:8080/"
+    status_code: [200, 302]
+  register: health_check
+  retries: 30
+  delay: 2
+  until: health_check.status in [200, 302]
+  ignore_errors: true
+
+- name: Report deployment status
+  debug:
+    msg: >-
+      Indiekit deployed at https://{{ domain }}.
+      Health check: {{ 'PASS' if health_check.status | default(0) in [200, 302] else 'PENDING — check logs with: docker compose logs -f' }}

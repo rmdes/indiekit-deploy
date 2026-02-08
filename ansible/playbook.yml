@@ -1,0 +1,15 @@
+---
+# Indiekit — Main provisioning playbook
+#
+# Usage:
+#   ansible-playbook -i inventory playbook.yml
+#
+# To update an existing deployment:
+#   ansible-playbook -i inventory playbook.yml --tags update
+
+- hosts: indiekit
+  become: true
+
+  roles:
+    - common
+    - deploy

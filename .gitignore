@@ -1,0 +1,25 @@
+# Environment files with secrets
+.env
+*.rmendes
+
+# Local development override (auto-loaded by docker compose)
+docker-compose.override.yml
+
+# Node
+node_modules/
+
+# Docker volumes (local dev)
+data/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Ansible vault
+*.vault
+vault-password
+
+# Editor
+*.swp
+*.swo
+*~

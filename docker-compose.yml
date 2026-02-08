@@ -1,0 +1,95 @@
+# Indiekit Docker Compose — Core services (minimal plugin set)
+#
+# Usage:
+#   cp .env.example .env   # Edit with your values
+#   docker compose up -d
+#
+# For full plugin set:
+#   docker compose -f docker-compose.yml -f docker-compose.full.yml up -d
+
+services:
+  mongodb:
+    image: mongo:7
+    volumes:
+      - mongodb_data:/data/db
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    profiles:
+      - redis
+
+  indiekit:
+    build:
+      context: .
+      dockerfile: docker/indiekit/Dockerfile
+    depends_on:
+      - mongodb
+    env_file: .env
+    environment:
+      - MONGODB_URL=mongodb://mongodb:27017/indiekit
+      - PORT=8080
+    volumes:
+      - content:/data/content
+      - uploads:/data/uploads
+      - indiekit_config:/data/config
+    restart: unless-stopped
+
+  eleventy:
+    build:
+      context: .
+      dockerfile: docker/eleventy/Dockerfile
+    depends_on:
+      - indiekit
+    env_file: .env
+    environment:
+      - INDIEKIT_URL=http://indiekit:8080
+    volumes:
+      - content:/data/content
+      - site:/data/site
+      - cache:/data/cache
+      - uploads:/data/uploads
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    depends_on:
+      - indiekit
+      - eleventy
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"  # HTTP/3
+    env_file: .env
+    volumes:
+      - ./docker/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - site:/data/site:ro
+      - uploads:/data/uploads:ro
+      - content:/data/content:ro
+      - caddy_data:/data/caddy
+      - caddy_config:/config
+    restart: unless-stopped
+
+  cron:
+    build:
+      context: .
+      dockerfile: docker/cron/Dockerfile
+    depends_on:
+      - indiekit
+    env_file: .env
+    environment:
+      - INDIEKIT_URL=http://indiekit:8080
+    volumes:
+      - indiekit_config:/data/config:ro
+    restart: unless-stopped
+
+volumes:
+  mongodb_data:
+  content:
+  site:
+  cache:
+  uploads:
+  indiekit_config:
+  caddy_data:
+  caddy_config:

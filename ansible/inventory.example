@@ -1,0 +1,6 @@
+[indiekit]
+my-server ansible_host=203.0.113.10 ansible_user=deploy
+
+# For multiple servers:
+# blog1 ansible_host=198.51.100.1 ansible_user=deploy
+# blog2 ansible_host=198.51.100.2 ansible_user=deploy

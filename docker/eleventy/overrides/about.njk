@@ -1,0 +1,105 @@
+---
+layout: layouts/base.njk
+title: About
+permalink: /about/
+eleventyExcludeFromCollections: true
+---
+
+{# Check if user has created an "about" page via Micropub #}
+{% set aboutPage = null %}
+{% for page in collections.pages %}
+  {% if page.data.title and page.data.title | lower == "about" %}
+    {% set aboutPage = page %}
+  {% endif %}
+{% endfor %}
+
+{% if aboutPage %}
+  {# User-created about page — render their content #}
+  <article class="h-card prose dark:prose-invert max-w-none">
+    <header class="mb-6 sm:mb-8 flex flex-col sm:flex-row gap-6 sm:gap-8 items-start not-prose">
+      <img
+        src="{{ site.author.avatar }}"
+        alt="{{ site.author.name }}"
+        class="u-photo w-32 h-32 sm:w-40 sm:h-40 rounded-full object-cover shadow-lg flex-shrink-0"
+        loading="eager"
+      >
+      <div class="min-w-0">
+        <h1 class="p-name text-2xl sm:text-3xl font-bold text-surface-900 dark:text-surface-100 mb-2">
+          {{ site.author.name }}
+        </h1>
+        {% if site.author.title %}
+        <p class="p-job-title text-xl text-primary-600 dark:text-primary-400 mb-2">{{ site.author.title }}</p>
+        {% endif %}
+        {% if site.author.location %}
+        <p class="p-locality text-surface-600 dark:text-surface-400">{{ site.author.location }}</p>
+        {% endif %}
+        <a href="{{ site.author.url }}" class="u-url u-uid hidden" rel="me">{{ site.author.url }}</a>
+      </div>
+    </header>
+    {{ aboutPage.content | safe }}
+  </article>
+
+{% else %}
+  {# Default about page — shown until the user creates an "about" page #}
+  <article class="h-card">
+    <header class="mb-6 sm:mb-8 flex flex-col sm:flex-row gap-6 sm:gap-8 items-start">
+      <img
+        src="{{ site.author.avatar }}"
+        alt="{{ site.author.name }}"
+        class="u-photo w-32 h-32 sm:w-40 sm:h-40 rounded-full object-cover shadow-lg flex-shrink-0"
+        loading="eager"
+      >
+      <div class="min-w-0">
+        <h1 class="p-name text-2xl sm:text-3xl font-bold text-surface-900 dark:text-surface-100 mb-2">
+          {{ site.author.name }}
+        </h1>
+        {% if site.author.title %}
+        <p class="p-job-title text-xl text-primary-600 dark:text-primary-400 mb-2">{{ site.author.title }}</p>
+        {% endif %}
+        {% if site.author.location %}
+        <p class="p-locality text-surface-600 dark:text-surface-400 mb-4">{{ site.author.location }}</p>
+        {% endif %}
+        <a href="{{ site.author.url }}" class="u-url u-uid hidden" rel="me">{{ site.author.url }}</a>
+      </div>
+    </header>
+
+    <div class="prose dark:prose-invert prose-lg max-w-none">
+      {% if site.author.bio %}
+      <p class="p-note text-lg">{{ site.author.bio }}</p>
+      {% endif %}
+
+      <h2>About This Site</h2>
+      <p>
+        This site is powered by <a href="https://getindiekit.com">Indiekit</a>, an IndieWeb
+        server that supports <a href="https://micropub.spec.indieweb.org/">Micropub</a>,
+        <a href="https://webmention.net/">Webmentions</a>, and other
+        <a href="https://indieweb.org">IndieWeb</a> standards.
+      </p>
+      <p>
+        Posts are authored via Micropub clients, stored as markdown files,
+        and published as a static site built with <a href="https://www.11ty.dev">Eleventy</a>.
+        Syndication to Mastodon, Bluesky, and LinkedIn happens automatically.
+      </p>
+
+      <p class="text-sm text-surface-500 dark:text-surface-400 mt-6 italic">
+        To customize this page, create a <strong>page</strong> post type titled <strong>"about"</strong> in Indiekit.
+      </p>
+
+      {% if site.social.length > 0 %}
+      <h2>Connect</h2>
+      <ul>
+        {% for link in site.social %}
+        <li><a href="{{ link.url }}" rel="me" target="_blank">{{ link.name }}</a></li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+
+      {% if site.author.email %}
+      <p>
+        Or send an email to
+        <a href="{{ site.author.email | obfuscateEmail('href') }}" class="u-email">{{ site.author.email | obfuscateEmail }}</a>
+      </p>
+      {% endif %}
+    </div>
+  </article>
+{% endif %}

@@ -1,0 +1,135 @@
+# Indiekit Caddyfile — Core profile
+#
+# Automatic HTTPS via Let's Encrypt for {$DOMAIN}.
+# Serves Eleventy static site + proxies Indiekit API endpoints.
+
+{$DOMAIN} {
+	# ─── Media files from content volume (direct serve, not proxied) ───
+	handle_path /media/photos/* {
+		root * /data/content/media/photos
+		file_server
+		header Cache-Control "public, max-age=2592000, immutable"
+	}
+	handle_path /media/images/* {
+		root * /data/content/media/images
+		file_server
+		header Cache-Control "public, max-age=2592000, immutable"
+	}
+	handle_path /media/videos/* {
+		root * /data/content/media/videos
+		file_server
+		header Cache-Control "public, max-age=2592000, immutable"
+	}
+	handle_path /media/audio/* {
+		root * /data/content/media/audio
+		file_server
+		header Cache-Control "public, max-age=2592000, immutable"
+	}
+
+	# ─── Uploaded media files ───
+	handle_path /uploads/* {
+		root * /data/uploads
+		file_server
+		header Cache-Control "public, max-age=2592000, immutable"
+	}
+
+	# ─── Indiekit API and admin endpoints (proxy to indiekit:8080) ───
+	handle /micropub* {
+		reverse_proxy indiekit:8080
+	}
+	handle /auth* {
+		reverse_proxy indiekit:8080
+	}
+	handle /media* {
+		reverse_proxy indiekit:8080 {
+			transport http {
+				# Allow large media uploads
+				read_buffer 50MB
+			}
+		}
+	}
+	handle /share* {
+		reverse_proxy indiekit:8080
+	}
+	handle /status* {
+		reverse_proxy indiekit:8080
+	}
+	handle /webmentions* {
+		reverse_proxy indiekit:8080
+	}
+	handle /syndicate* {
+		reverse_proxy indiekit:8080
+	}
+	handle /session* {
+		reverse_proxy indiekit:8080
+	}
+	handle /posts* {
+		reverse_proxy indiekit:8080
+	}
+	handle /create* {
+		reverse_proxy indiekit:8080
+	}
+	handle /files* {
+		reverse_proxy indiekit:8080
+	}
+	handle /linkedin* {
+		reverse_proxy indiekit:8080
+	}
+	handle /webmention-sender* {
+		reverse_proxy indiekit:8080
+	}
+
+	# ─── Indiekit admin shortcuts ───
+	redir /admin /session/login?redirect=/dashboard
+	handle /dashboard {
+		rewrite * /
+		reverse_proxy indiekit:8080
+	}
+	handle /offline {
+		reverse_proxy indiekit:8080
+	}
+	handle /plugins* {
+		reverse_proxy indiekit:8080
+	}
+
+	# ─── Indiekit assets and service worker ───
+	handle /assets* {
+		reverse_proxy indiekit:8080
+	}
+	handle /serviceworker.js {
+		reverse_proxy indiekit:8080
+	}
+	handle /app.webmanifest {
+		reverse_proxy indiekit:8080
+	}
+	handle /id {
+		reverse_proxy indiekit:8080
+	}
+	handle /robots.txt {
+		reverse_proxy indiekit:8080
+	}
+
+	# ─── Well-known endpoints ───
+	handle /.well-known/* {
+		reverse_proxy indiekit:8080
+	}
+
+	# ─── Legacy URL redirects (old Indiekit URL format) ───
+	@legacy_articles path_regexp legacy ^/(articles|notes|bookmarks|likes|reposts|photos|replies|videos|audio|jams|rsvps|events)/(\d{4})/(\d{2})/(\d{2})/(.+)$
+	redir @legacy_articles /content/{re.legacy.1}/{re.legacy.2}-{re.legacy.3}-{re.legacy.4}-{re.legacy.5}/ 301
+
+	# ─── Default: serve Eleventy static site ───
+	handle {
+		root * /data/site
+		try_files {path} {path}/ {path}.html
+		file_server
+	}
+
+	# ─── Compression ───
+	encode gzip
+
+	# ─── Logging ───
+	log {
+		output stdout
+	}
+}

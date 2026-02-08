@@ -1,0 +1,5 @@
+# Syndication — process pending POSSE syndications every 2 minutes
+*/2 * * * * /usr/local/bin/syndicate.sh >> /proc/1/fd/1 2>&1
+
+# Webmentions — send pending webmentions every 5 minutes
+*/5 * * * * /usr/local/bin/webmention.sh >> /proc/1/fd/1 2>&1

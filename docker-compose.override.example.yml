@@ -1,0 +1,23 @@
+# Local development overrides
+#
+# Copy this file to docker-compose.override.yml for local testing:
+#   cp docker-compose.override.example.yml docker-compose.override.yml
+#
+# It fixes localhost networking: containers can reach their own SITE_URL
+# by routing through the Docker host to Caddy.
+#
+# In production (with a real domain), do NOT use this file.
+# DNS resolves the real domain correctly without extra_hosts.
+
+services:
+  indiekit:
+    extra_hosts:
+      - "localhost:host-gateway"
+    environment:
+      - NODE_TLS_REJECT_UNAUTHORIZED=0
+
+  eleventy:
+    extra_hosts:
+      - "localhost:host-gateway"
+    environment:
+      - NODE_TLS_REJECT_UNAUTHORIZED=0

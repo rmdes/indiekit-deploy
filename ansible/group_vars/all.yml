@@ -1,0 +1,69 @@
+---
+# Indiekit — Ansible variables
+#
+# These variables are templated into .env on the target server.
+# Override per-host in host_vars/ or pass via --extra-vars.
+
+# ─── Required ───
+domain: "example.com"
+site_url: "https://example.com"
+site_name: "My IndieWeb Blog"
+site_description: "An IndieWeb blog powered by Indiekit"
+author_name: "Your Name"
+author_bio: "Welcome to my IndieWeb blog."
+
+# ─── Deploy settings ───
+deploy_user: deploy
+deploy_dir: /opt/indiekit
+repo_url: "https://github.com/rmdes/indiekit-deploy.git"
+repo_branch: main
+
+# Profile: "core" or "full"
+compose_profile: "core"
+
+# ─── Optional site settings ───
+site_locale: "en"
+site_timezone: "UTC"
+site_categories: "blog,notes,links,photos"
+author_avatar: "/images/default-avatar.svg"
+author_title: ""
+author_location: ""
+author_email: ""
+
+# ─── Optional syndication (leave empty to disable) ───
+mastodon_instance: ""
+mastodon_user: ""
+mastodon_access_token: ""
+
+bluesky_handle: ""
+bluesky_password: ""
+
+linkedin_access_token: ""
+linkedin_author_name: ""
+linkedin_profile_url: ""
+linkedin_client_id: ""
+linkedin_client_secret: ""
+
+# ─── Optional integrations (full profile) ───
+github_username: ""
+github_token: ""
+github_featured_repos: ""
+
+funkwhale_instance: ""
+funkwhale_username: ""
+funkwhale_token: ""
+
+lastfm_api_key: ""
+lastfm_username: ""
+
+youtube_api_key: ""
+youtube_channels: ""
+
+webmention_io_token: ""
+
+podroll_episodes_url: ""
+podroll_opml_url: ""
+
+# Admin password hash (set after first login at /session/login)
+# Use ansible-vault for production: ansible-vault encrypt_string '$2b$10$...'
+password_secret: ""
