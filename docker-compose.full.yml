@@ -7,6 +7,7 @@
 
 services:
   indiekit:
+    image: rmdes/indiekit-deploy-server:latest
     build:
       context: .
       dockerfile: docker/indiekit/Dockerfile

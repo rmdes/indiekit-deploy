@@ -1,4 +1,5 @@
-.PHONY: up up-full down logs build restart shell-indiekit shell-eleventy shell-cron backup status
+.PHONY: up up-full down logs build restart shell-indiekit shell-eleventy shell-cron backup status \
+       build-release tag push release version
 
 # ─── Core profile ───
 
@@ -86,3 +87,36 @@ init:
 update-theme:
 	git submodule update --remote eleventy-site
 	@echo "==> Theme updated. Run 'make build' to rebuild."
+
+# ─── Docker Hub ───
+
+# Version from package.core.json (upstream Indiekit version)
+VERSION := $(shell node -p "require('./docker/indiekit/package.core.json').dependencies['@indiekit/indiekit']")
+REGISTRY := rmdes
+
+# Build full-profile images with version tags
+build-release:
+	docker compose -f docker-compose.yml -f docker-compose.full.yml build --no-cache
+
+# Tag images with version number (in addition to :latest)
+tag:
+	docker tag $(REGISTRY)/indiekit-deploy-server:latest $(REGISTRY)/indiekit-deploy-server:$(VERSION)
+	docker tag $(REGISTRY)/indiekit-deploy-site:latest $(REGISTRY)/indiekit-deploy-site:$(VERSION)
+	docker tag $(REGISTRY)/indiekit-deploy-cron:latest $(REGISTRY)/indiekit-deploy-cron:$(VERSION)
+
+# Push all images to Docker Hub
+push: tag
+	docker push $(REGISTRY)/indiekit-deploy-server:latest
+	docker push $(REGISTRY)/indiekit-deploy-server:$(VERSION)
+	docker push $(REGISTRY)/indiekit-deploy-site:latest
+	docker push $(REGISTRY)/indiekit-deploy-site:$(VERSION)
+	docker push $(REGISTRY)/indiekit-deploy-cron:latest
+	docker push $(REGISTRY)/indiekit-deploy-cron:$(VERSION)
+
+# Full release: build + tag + push
+release: build-release push
+	@echo "==> Released $(VERSION) to Docker Hub"
+
+# Show current version
+version:
+	@echo $(VERSION)

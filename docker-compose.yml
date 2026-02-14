@@ -21,6 +21,7 @@ services:
       - redis
 
   indiekit:
+    image: rmdes/indiekit-deploy-server:latest
     build:
       context: .
       dockerfile: docker/indiekit/Dockerfile
@@ -37,6 +38,7 @@ services:
     restart: unless-stopped
 
   eleventy:
+    image: rmdes/indiekit-deploy-site:latest
     build:
       context: .
       dockerfile: docker/eleventy/Dockerfile
@@ -72,6 +74,7 @@ services:
     restart: unless-stopped
 
   cron:
+    image: rmdes/indiekit-deploy-cron:latest
     build:
       context: .
       dockerfile: docker/cron/Dockerfile
