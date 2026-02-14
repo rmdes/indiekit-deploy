@@ -23,7 +23,7 @@
     "@indiekit/post-type-reply": "1.0.0-beta.25",
     "@indiekit/post-type-repost": "1.0.0-beta.25",
     "@rmdes/indiekit-post-type-page": "1.0.4",
-    "@rmdes/indiekit-preset-eleventy": "1.0.0-beta.35",
+    "@rmdes/indiekit-preset-eleventy": "1.0.0-beta.36",
     "@rmdes/indiekit-endpoint-micropub": "1.0.0-beta.29",
     "@rmdes/indiekit-endpoint-syndicate": "1.0.0-beta.32",
     "@rmdes/indiekit-endpoint-files": "1.0.0",
