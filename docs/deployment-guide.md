@@ -485,7 +485,7 @@ LASTFM_USERNAME=janedoe
 # ─── YouTube ───
 # Shows latest videos, live streaming status on /youtube
 # Get an API key from Google Cloud Console > APIs & Services > Credentials
-YOUTUBE_API_KEY=AIzaSyB1c2D3e4F5g6H7i8J9k0L1m2N3o4P5q6R
+YOUTUBE_API_KEY=your-youtube-api-key-here
 YOUTUBE_CHANNELS=@janedoe-tech
 
 # ─── Funkwhale ───
