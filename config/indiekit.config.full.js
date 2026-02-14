@@ -2,7 +2,8 @@
  * Indiekit configuration — Full profile
  *
  * All plugins: core + GitHub, Funkwhale, Last.fm, YouTube, RSS,
- * Microsub, Webmentions proxy, Podroll, extra post types.
+ * Microsub, Webmentions proxy, Podroll, Blogroll, Homepage, CV,
+ * extra post types.
  *
  * Syndicators are only loaded when their required env vars are set.
  * Environment variables are set in .env (see .env.example for docs).
@@ -32,6 +33,7 @@ const plugins = [
   "@rmdes/indiekit-endpoint-syndicate",
   "@indiekit/endpoint-json-feed",
   "@rmdes/indiekit-endpoint-webmention-sender",
+  "@rmdes/indiekit-endpoint-files",
   // IndieNews (safe without config)
   "@rmdes/indiekit-syndicator-indienews",
   // Full profile endpoints (always loaded)
@@ -43,6 +45,9 @@ const plugins = [
   "@rmdes/indiekit-endpoint-microsub",
   "@rmdes/indiekit-endpoint-webmentions-proxy",
   "@rmdes/indiekit-endpoint-podroll",
+  "@rmdes/indiekit-endpoint-blogroll",
+  "@rmdes/indiekit-endpoint-homepage",
+  "@rmdes/indiekit-endpoint-cv",
 ];
 
 // Conditional syndicators — only load when required env vars are present
@@ -57,7 +62,7 @@ if (process.env.LINKEDIN_ACCESS_TOKEN || process.env.LINKEDIN_CLIENT_ID) {
   plugins.push("@rmdes/indiekit-endpoint-linkedin");
 }
 if (process.env.WEBMENTION_IO_TOKEN) {
-  plugins.push("@indiekit/endpoint-webmention-io");
+  plugins.push("@rmdes/indiekit-endpoint-webmention-io");
 }
 
 export default {
@@ -125,8 +130,14 @@ export default {
     checked: false,
   },
 
-  "@indiekit/endpoint-webmention-io": {
+  "@rmdes/indiekit-endpoint-webmention-io": {
     token: process.env.WEBMENTION_IO_TOKEN,
+    domain: process.env.SITE_URL?.replace(/^https?:\/\//, "").replace(
+      /\/$/,
+      "",
+    ),
+    syncInterval: 900_000,
+    cacheTtl: 60,
   },
 
   // ─── Full profile endpoints ───
@@ -211,5 +222,22 @@ export default {
     opmlUrl: process.env.PODROLL_OPML_URL,
     syncInterval: 900_000,
     maxEpisodes: 100,
+  },
+
+  // ─── Blogroll, Homepage, CV ───
+
+  "@rmdes/indiekit-endpoint-blogroll": {
+    mountPath: "/blogrollapi",
+    syncInterval: 900_000,
+    maxItemAge: 7,
+  },
+
+  "@rmdes/indiekit-endpoint-homepage": {
+    mountPath: "/homepage",
+    contentDir: "/data/content",
+  },
+
+  "@rmdes/indiekit-endpoint-cv": {
+    mountPath: "/cv",
   },
 };

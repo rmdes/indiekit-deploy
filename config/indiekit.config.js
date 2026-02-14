@@ -27,6 +27,7 @@ const plugins = [
   "@rmdes/indiekit-endpoint-syndicate",
   "@indiekit/endpoint-json-feed",
   "@rmdes/indiekit-endpoint-webmention-sender",
+  "@rmdes/indiekit-endpoint-files",
   // IndieNews (safe without config — just unchecked by default)
   "@rmdes/indiekit-syndicator-indienews",
 ];
@@ -43,7 +44,7 @@ if (process.env.LINKEDIN_ACCESS_TOKEN || process.env.LINKEDIN_CLIENT_ID) {
   plugins.push("@rmdes/indiekit-endpoint-linkedin");
 }
 if (process.env.WEBMENTION_IO_TOKEN) {
-  plugins.push("@indiekit/endpoint-webmention-io");
+  plugins.push("@rmdes/indiekit-endpoint-webmention-io");
 }
 
 export default {
@@ -114,7 +115,13 @@ export default {
   },
 
   // Webmention.io integration
-  "@indiekit/endpoint-webmention-io": {
+  "@rmdes/indiekit-endpoint-webmention-io": {
     token: process.env.WEBMENTION_IO_TOKEN,
+    domain: process.env.SITE_URL?.replace(/^https?:\/\//, "").replace(
+      /\/$/,
+      "",
+    ),
+    syncInterval: 900_000,
+    cacheTtl: 60,
   },
 };

@@ -22,6 +22,10 @@ RUN chmod +x /app/entrypoint.sh
 # Store the profile for the entrypoint to use
 ENV INDIEKIT_PROFILE=${PROFILE}
 
+# Increase rate limit from 250 to 2000 requests per 15 minutes
+# The upstream default (250) is too low for active admin use (editing, media browsing, autosave)
+RUN sed -i 's/max: 250/max: 2000/' /app/node_modules/@indiekit/indiekit/lib/routes.js
+
 EXPOSE 8080
 
 CMD ["/app/entrypoint.sh"]
