@@ -22,9 +22,13 @@ RUN chmod +x /app/entrypoint.sh
 # Store the profile for the entrypoint to use
 ENV INDIEKIT_PROFILE=${PROFILE}
 
-# Increase rate limit from 250 to 2000 requests per 15 minutes
-# The upstream default (250) is too low for active admin use (editing, media browsing, autosave)
-RUN sed -i 's/max: 250/max: 2000/' /app/node_modules/@indiekit/indiekit/lib/routes.js
+# Patch routes.js: remove rate limiting from authenticated routes
+# Upstream applies the same rate limiter to ALL routes. Authenticated routes (after
+# indieauth.authenticate()) are already protected by auth — rate limiting them causes
+# 429 errors during normal admin browsing, especially behind reverse proxies where
+# all clients share a single IP. Rate limiting is kept on session routes (brute force)
+# and public/well-known endpoints (abuse protection).
+COPY docker/indiekit/patches/routes.js /app/node_modules/@indiekit/indiekit/lib/routes.js
 
 EXPOSE 8080
 
