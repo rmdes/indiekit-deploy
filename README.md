@@ -31,6 +31,8 @@ Docker Compose + Ansible deployment for [Indiekit](https://getindiekit.com), an 
 
 **Services:** MongoDB, Indiekit (Node.js), Eleventy (static site builder), Caddy (HTTPS reverse proxy), Cron (background jobs). Optional Redis cache.
 
+> **New to Indiekit?** Read the [full deployment guide](docs/deployment-guide.md) — a step-by-step walkthrough covering server setup, DNS, configuration, first-run password creation, syndication, webmentions, and the full plugin set.
+
 ## Quick Start (Docker Compose)
 
 **Prerequisites:** Docker and Docker Compose v2 on a server with ports 80 and 443 open.
