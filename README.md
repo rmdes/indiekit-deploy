@@ -63,6 +63,36 @@ make up
 
 Caddy automatically provisions a Let's Encrypt TLS certificate for your domain. Make sure your DNS A record points to your server before starting.
 
+### Using Pre-built Images (skip the build)
+
+Pre-built images are published to Docker Hub, so you can skip the build step entirely:
+
+| Image | Description |
+|-------|-------------|
+| [`rmdes/indiekit-deploy-server`](https://hub.docker.com/r/rmdes/indiekit-deploy-server) | Indiekit Node.js server (full plugin set) |
+| [`rmdes/indiekit-deploy-site`](https://hub.docker.com/r/rmdes/indiekit-deploy-site) | Eleventy static site builder |
+| [`rmdes/indiekit-deploy-cron`](https://hub.docker.com/r/rmdes/indiekit-deploy-cron) | Cron sidecar (syndication + webmentions) |
+
+```bash
+git clone https://github.com/rmdes/indiekit-deploy.git
+cd indiekit-deploy
+make init
+cp .env.example .env   # Edit with your values
+docker compose pull    # Pull pre-built images from Docker Hub
+docker compose up -d   # Start — no build needed
+```
+
+Images are tagged with both `latest` and the upstream Indiekit version (e.g. `1.0.0-beta.25`). To pin a specific version:
+
+```bash
+# In docker-compose.override.yml
+services:
+  indiekit:
+    image: rmdes/indiekit-deploy-server:1.0.0-beta.25
+```
+
+If you prefer to build locally instead (e.g. to use the core plugin profile), use `make build` or `make build-full` as described above.
+
 ### Setting Your Admin Password
 
 On first visit to `/session/login`, Indiekit shows a "New password" page:
