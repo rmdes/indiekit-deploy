@@ -4,6 +4,15 @@
 # Serves Eleventy static site + proxies Indiekit API endpoints.
 
 {$DOMAIN} {
+	# ─── Security headers ───
+	header {
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: https:; media-src 'self' https:; font-src 'self'; frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com; connect-src 'self'; base-uri 'self'; form-action 'self'"
+	}
+
 	# ─── Media files from content volume (direct serve, not proxied) ───
 	handle_path /media/photos/* {
 		root * /data/content/media/photos

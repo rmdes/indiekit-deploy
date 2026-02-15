@@ -30,6 +30,12 @@ ENV INDIEKIT_PROFILE=${PROFILE}
 # and public/well-known endpoints (abuse protection).
 COPY docker/indiekit/patches/routes.js /app/node_modules/@indiekit/indiekit/lib/routes.js
 
+# Patch error.js: suppress stack traces in production
+# Upstream exposes full stack traces in both HTML and JSON error responses,
+# leaking internal file paths and dependency versions. This patch only includes
+# stack traces when NODE_ENV !== "production".
+COPY docker/indiekit/patches/error.js /app/node_modules/@indiekit/indiekit/lib/middleware/error.js
+
 EXPOSE 8080
 
 CMD ["/app/entrypoint.sh"]
