@@ -2,7 +2,7 @@
  * Indiekit configuration — Full profile
  *
  * All plugins: core + GitHub, Funkwhale, Last.fm, YouTube, RSS,
- * Microsub, Webmentions proxy, Podroll, Blogroll, Homepage, CV,
+ * Microsub, Podroll, Blogroll, Homepage, CV,
  * extra post types.
  *
  * Syndicators are only loaded when their required env vars are set.
@@ -43,7 +43,6 @@ const plugins = [
   "@rmdes/indiekit-endpoint-youtube",
   "@rmdes/indiekit-endpoint-rss",
   "@rmdes/indiekit-endpoint-microsub",
-  "@rmdes/indiekit-endpoint-webmentions-proxy",
   "@rmdes/indiekit-endpoint-podroll",
   "@rmdes/indiekit-endpoint-blogroll",
   "@rmdes/indiekit-endpoint-homepage",
@@ -204,16 +203,6 @@ export default {
 
   "@rmdes/indiekit-endpoint-microsub": {
     mountPath: "/microsub",
-  },
-
-  "@rmdes/indiekit-endpoint-webmentions-proxy": {
-    mountPath: "/webmentions-api",
-    token: process.env.WEBMENTION_IO_TOKEN,
-    domain: process.env.SITE_URL?.replace(/^https?:\/\//, "").replace(
-      /\/$/,
-      "",
-    ),
-    cacheTtl: 60,
   },
 
   "@rmdes/indiekit-endpoint-podroll": {

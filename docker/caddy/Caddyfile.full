@@ -109,9 +109,6 @@
 	handle /microsub* {
 		reverse_proxy indiekit:8080
 	}
-	handle /webmentions-api* {
-		reverse_proxy indiekit:8080
-	}
 	handle /blogrollapi* {
 		reverse_proxy indiekit:8080
 	}

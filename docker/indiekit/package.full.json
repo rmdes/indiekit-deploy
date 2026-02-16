@@ -45,8 +45,7 @@
     "@rmdes/indiekit-endpoint-youtube": "1.2.3",
     "@rmdes/indiekit-endpoint-rss": "1.0.12",
     "@rmdes/indiekit-endpoint-microsub": "1.0.30",
-    "@rmdes/indiekit-endpoint-webmentions-proxy": "1.0.3",
-    "@rmdes/indiekit-endpoint-podroll": "1.0.10",
+    "@rmdes/indiekit-endpoint-podroll": "1.0.11",
     "@rmdes/indiekit-endpoint-blogroll": "1.0.18",
     "@rmdes/indiekit-endpoint-homepage": "1.0.14",
     "@rmdes/indiekit-endpoint-cv": "1.0.13"
