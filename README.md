@@ -67,24 +67,34 @@ Caddy automatically provisions a Let's Encrypt TLS certificate for your domain. 
 
 ### Using Pre-built Images (skip the build)
 
-Pre-built images are published to Docker Hub, so you can skip the build step entirely:
+Pre-built images are automatically built on every commit and published to both Docker Hub and GitHub Container Registry (GHCR):
 
 | Image | Description |
 |-------|-------------|
-| [`rmdes/indiekit-deploy-server`](https://hub.docker.com/r/rmdes/indiekit-deploy-server) | Indiekit Node.js server (full plugin set) |
+| [`rmdes/indiekit-deploy-server`](https://hub.docker.com/r/rmdes/indiekit-deploy-server) | Indiekit server — core plugin set |
+| [`rmdes/indiekit-deploy-server-full`](https://hub.docker.com/r/rmdes/indiekit-deploy-server-full) | Indiekit server — full plugin set |
 | [`rmdes/indiekit-deploy-site`](https://hub.docker.com/r/rmdes/indiekit-deploy-site) | Eleventy static site builder |
 | [`rmdes/indiekit-deploy-cron`](https://hub.docker.com/r/rmdes/indiekit-deploy-cron) | Cron sidecar (syndication + webmentions) |
+
+GHCR alternatives are available at `ghcr.io/rmdes/indiekit-deploy-*`.
 
 ```bash
 git clone https://github.com/rmdes/indiekit-deploy.git
 cd indiekit-deploy
 make init
 cp .env.example .env   # Edit with your values
-docker compose pull    # Pull pre-built images from Docker Hub
+docker compose pull    # Pull pre-built images
 docker compose up -d   # Start — no build needed
 ```
 
-Images are tagged with both `latest` and the upstream Indiekit version (e.g. `1.0.0-beta.25`). To pin a specific version:
+For the full plugin set with pre-built images:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.full.yml pull
+docker compose -f docker-compose.yml -f docker-compose.full.yml up -d
+```
+
+Images are tagged `:latest`, `:VERSION` (e.g. `1.0.0-beta.25`), and `:sha-SHORT`. To pin a specific version:
 
 ```bash
 # In docker-compose.override.yml
@@ -93,7 +103,7 @@ services:
     image: rmdes/indiekit-deploy-server:1.0.0-beta.25
 ```
 
-If you prefer to build locally instead (e.g. to use the core plugin profile), use `make build` or `make build-full` as described above.
+If you prefer to build locally instead, use `make build` or `make build-full`.
 
 ### Setting Your Admin Password
 
@@ -266,8 +276,16 @@ make restore FILE=backups/indiekit-20260207-120000.tar.gz
 
 ## Updating
 
+### With pre-built images (recommended)
+
 ```bash
-# Pull latest changes
+docker compose pull    # Pull latest images
+docker compose up -d   # Restart with new images
+```
+
+### Building locally
+
+```bash
 git pull
 make update-theme   # if theme has updates
 make build          # rebuild images
@@ -318,7 +336,7 @@ make up             # restart with new images
 | Config | `start.sh` orchestration | Docker entrypoints + compose |
 | Background jobs | Shell loops in start.sh | Cron sidecar container |
 | File storage | Cloudron `/app/data` | Docker named volumes |
-| Updates | `cloudron build && cloudron update` | `make build && make up` |
+| Updates | `cloudron build && cloudron update` | `docker compose pull && docker compose up -d` |
 | Plugins | All pre-installed | Core by default, full via override |
 
 ## License
