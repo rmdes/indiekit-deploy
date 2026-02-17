@@ -7,7 +7,9 @@
 
 services:
   indiekit:
-    image: rmdes/indiekit-deploy-server:latest
+    # Pre-built full image includes all @rmdes/* plugins
+    # GHCR alternative: ghcr.io/rmdes/indiekit-deploy-server-full:latest
+    image: rmdes/indiekit-deploy-server-full:latest
     build:
       context: .
       dockerfile: docker/indiekit/Dockerfile

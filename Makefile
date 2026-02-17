@@ -1,5 +1,5 @@
 .PHONY: up up-full down logs build restart shell-indiekit shell-eleventy shell-cron backup status \
-       build-release tag push release version
+       build-release tag push release version ci ci-status
 
 # ─── Core profile ───
 
@@ -120,3 +120,12 @@ release: build-release push
 # Show current version
 version:
 	@echo $(VERSION)
+
+# ─── CI/CD ───
+
+# Trigger GitHub Actions build from local machine
+ci:
+	gh workflow run build-images.yml
+
+ci-status:
+	gh run list --workflow=build-images.yml --limit=5
