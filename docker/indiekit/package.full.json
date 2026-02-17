@@ -47,7 +47,7 @@
     "@rmdes/indiekit-endpoint-microsub": "1.0.31",
     "@rmdes/indiekit-endpoint-podroll": "1.0.11",
     "@rmdes/indiekit-endpoint-blogroll": "1.0.22",
-    "@rmdes/indiekit-endpoint-homepage": "1.0.14",
+    "@rmdes/indiekit-endpoint-homepage": "1.0.15",
     "@rmdes/indiekit-endpoint-cv": "1.0.13"
   }
 }
