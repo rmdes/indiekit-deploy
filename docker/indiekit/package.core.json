@@ -32,7 +32,7 @@
     "@rmdes/indiekit-syndicator-linkedin": "1.0.2",
     "@rmdes/indiekit-endpoint-linkedin": "1.0.5",
     "@rmdes/indiekit-syndicator-indienews": "1.0.1",
-    "@rmdes/indiekit-endpoint-webmention-sender": "1.0.5",
+    "@rmdes/indiekit-endpoint-webmention-sender": "1.0.6",
     "@rmdes/indiekit-endpoint-webmention-io": "1.0.5"
   }
 }
