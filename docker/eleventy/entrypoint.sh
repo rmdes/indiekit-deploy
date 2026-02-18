@@ -90,7 +90,7 @@ while true; do
         fi
     fi
 
-    ./node_modules/.bin/eleventy --watch --output=/data/site || true
+    ./node_modules/.bin/eleventy --watch --incremental --output=/data/site || true
     EXIT_CODE=$?
     echo "[eleventy-watcher] Exited with code $EXIT_CODE at $(date '+%Y-%m-%d %H:%M:%S')"
 done
