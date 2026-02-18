@@ -34,6 +34,7 @@ const plugins = [
   "@indiekit/endpoint-json-feed",
   "@rmdes/indiekit-endpoint-webmention-sender",
   "@rmdes/indiekit-endpoint-files",
+  "@rmdes/indiekit-endpoint-conversations",
   // IndieNews (safe without config)
   "@rmdes/indiekit-syndicator-indienews",
   // Full profile endpoints (always loaded)
@@ -137,6 +138,11 @@ export default {
     ),
     syncInterval: 900_000,
     cacheTtl: 60,
+  },
+
+  // Conversations endpoint
+  "@rmdes/indiekit-endpoint-conversations": {
+    mountPath: "/conversations",
   },
 
   // ─── Full profile endpoints ───

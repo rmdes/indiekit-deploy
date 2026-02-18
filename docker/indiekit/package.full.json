@@ -32,8 +32,8 @@
     "@rmdes/indiekit-endpoint-micropub": "1.0.0-beta.29",
     "@rmdes/indiekit-endpoint-syndicate": "1.0.0-beta.32",
     "@rmdes/indiekit-endpoint-files": "1.0.0",
-    "@rmdes/indiekit-syndicator-mastodon": "1.0.7",
-    "@rmdes/indiekit-syndicator-bluesky": "1.0.11",
+    "@rmdes/indiekit-syndicator-mastodon": "1.0.8",
+    "@rmdes/indiekit-syndicator-bluesky": "1.0.12",
     "@rmdes/indiekit-syndicator-linkedin": "1.0.2",
     "@rmdes/indiekit-endpoint-linkedin": "1.0.5",
     "@rmdes/indiekit-syndicator-indienews": "1.0.1",
@@ -48,6 +48,7 @@
     "@rmdes/indiekit-endpoint-podroll": "1.0.11",
     "@rmdes/indiekit-endpoint-blogroll": "1.0.22",
     "@rmdes/indiekit-endpoint-homepage": "1.0.15",
-    "@rmdes/indiekit-endpoint-cv": "1.0.13"
+    "@rmdes/indiekit-endpoint-cv": "1.0.13",
+    "@rmdes/indiekit-endpoint-conversations": "1.0.0"
   }
 }

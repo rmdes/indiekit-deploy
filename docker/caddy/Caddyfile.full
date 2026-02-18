@@ -86,6 +86,9 @@
 	handle /webmention-sender* {
 		reverse_proxy indiekit:8080
 	}
+	handle /conversations* {
+		reverse_proxy indiekit:8080
+	}
 
 	# ─── Full profile: additional plugin endpoints ───
 	handle /githubapi* {

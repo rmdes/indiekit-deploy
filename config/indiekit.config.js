@@ -28,6 +28,7 @@ const plugins = [
   "@indiekit/endpoint-json-feed",
   "@rmdes/indiekit-endpoint-webmention-sender",
   "@rmdes/indiekit-endpoint-files",
+  "@rmdes/indiekit-endpoint-conversations",
   // IndieNews (safe without config — just unchecked by default)
   "@rmdes/indiekit-syndicator-indienews",
 ];
@@ -112,6 +113,11 @@ export default {
   "@rmdes/indiekit-syndicator-indienews": {
     languages: process.env.INDIENEWS_LANGUAGES?.split(",") || ["en"],
     checked: false,
+  },
+
+  // Conversations endpoint
+  "@rmdes/indiekit-endpoint-conversations": {
+    mountPath: "/conversations",
   },
 
   // Webmention.io integration

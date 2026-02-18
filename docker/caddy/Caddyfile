@@ -87,6 +87,9 @@
 	handle /webmention-sender* {
 		reverse_proxy indiekit:8080
 	}
+	handle /conversations* {
+		reverse_proxy indiekit:8080
+	}
 
 	# ─── Indiekit admin shortcuts ───
 	redir /admin /session/login?redirect=/dashboard
