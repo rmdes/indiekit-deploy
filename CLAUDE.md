@@ -131,9 +131,20 @@ All data lives in named Docker volumes (persists across container restarts):
 - Requires: DNS A record pointing to server IP, ports 80/443 open, ACME HTTP challenge on port 80
 - Certificates stored in `caddy_data` volume
 
-**Legacy URL redirects:**
-- Caddyfile includes rewrites for old Indiekit URL format: `/TYPE/YYYY/MM/DD/slug/` → `/content/TYPE/YYYY-MM-DD-slug/`
-- Required because nginx rewrites in Cloudron deployment use this pattern
+**URL handling (canonical Indiekit URLs):**
+- Posts are served at their canonical Indiekit URLs: `/TYPE/YYYY/MM/DD/slug/` (e.g., `/notes/2026/02/22/abc123/`)
+- Old `/content/TYPE/YYYY-MM-DD-slug/` URLs are 301-redirected to canonical format
+- This matches the Cloudron deployment's URL handling (reversed Feb 2026)
+- The Eleventy data cascade (`_data/eleventyComputed.js`) auto-converts stale `/content/` permalinks in frontmatter
+
+**ActivityPub federation (full profile):**
+- Caddy proxies `/activitypub*` and `/nodeinfo/*` to Indiekit with CORS headers
+- AP content negotiation: requests with `Accept: application/activity+json` or `application/ld+json` are proxied to Indiekit for AS2 representations
+- Configured via env vars: `AP_HANDLE`, `AP_LOG_LEVEL`, `AP_DEBUG`, `AP_DEBUG_PASSWORD`
+
+**WebSub feed discovery:**
+- Feed files (`/feed.xml`, `/feed.json`) include WebSub `Link` headers for hub discovery
+- `/feed` redirects to `/feed.xml`
 
 ### Ansible
 

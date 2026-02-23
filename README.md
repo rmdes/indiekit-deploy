@@ -134,7 +134,7 @@ Minimal plugin set for a functional IndieWeb blog:
 | Post types | article, bookmark, like, note, photo, reply, repost |
 | Preset | `@rmdes/indiekit-preset-eleventy` (permalink fix) |
 | Store | `@indiekit/store-file-system` |
-| Endpoints | Micropub, Syndicate, JSON Feed, Webmention.io, Webmention Sender |
+| Endpoints | Micropub, Syndicate, JSON Feed, Webmention.io, Webmention Sender, Conversations |
 | Syndicators | Mastodon, Bluesky, LinkedIn, IndieNews |
 
 ```bash
@@ -143,7 +143,7 @@ make up
 
 ### Full
 
-All `@rmdes` plugins — adds GitHub activity, Funkwhale, Last.fm, YouTube, RSS reader, Microsub, Webmentions proxy, Podroll, extra post types (audio, event, jam, rsvp, video, page).
+All `@rmdes` plugins — adds GitHub activity, Funkwhale, Last.fm, YouTube, RSS reader, Microsub, Webmentions proxy, Podroll, Comments, ActivityPub federation, and extra post types (audio, event, jam, rsvp, video, page).
 
 ```bash
 make up-full
@@ -326,7 +326,22 @@ make up             # restart with new images
 - The `MONGODB_URL` is set automatically in `docker-compose.yml`
 - Check: `docker compose logs mongodb`
 
+## URL Handling
+
+Posts are served at their canonical Indiekit URLs: `/TYPE/YYYY/MM/DD/slug/` (e.g., `/notes/2026/02/22/abc123/`). Old `/content/TYPE/YYYY-MM-DD-slug/` URLs are 301-redirected to the canonical format. The Eleventy data cascade (`_data/eleventyComputed.js`) auto-converts stale `/content/` permalinks in frontmatter.
+
+## ActivityPub Federation (Full Profile)
+
+The full profile supports ActivityPub federation, making your site a full AP actor. Other Mastodon/Fediverse users can follow, like, and reply to your posts. Caddy proxies `/activitypub*` and `/nodeinfo/*` with CORS headers, and handles AP content negotiation (requests with `Accept: application/activity+json` or `application/ld+json` are proxied to Indiekit for AS2 representations).
+
+Configure via `.env`:
+- `AP_HANDLE` — your ActivityPub handle (e.g., `@handle@your-domain.com`)
+- `AP_LOG_LEVEL` — logging level (default: `info`)
+- `AP_DEBUG` / `AP_DEBUG_PASSWORD` — enable debug dashboard
+
 ## Differences from Cloudron Deployment
+
+Both deployments are at feature parity. They use the same Eleventy theme (Git submodule), the same `@rmdes/*` plugins, and the same environment-variable-driven configuration.
 
 | Aspect | Cloudron | Docker Compose |
 |--------|----------|----------------|
@@ -338,6 +353,7 @@ make up             # restart with new images
 | File storage | Cloudron `/app/data` | Docker named volumes |
 | Updates | `cloudron build && cloudron update` | `docker compose pull && docker compose up -d` |
 | Plugins | All pre-installed | Core by default, full via override |
+| Reverse proxy | nginx | Caddy |
 
 ## License
 

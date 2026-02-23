@@ -10,7 +10,7 @@
 		X-Frame-Options "SAMEORIGIN"
 		Referrer-Policy "strict-origin-when-cross-origin"
 		Permissions-Policy "camera=(), microphone=(), geolocation=()"
-		Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; img-src 'self' data: https:; media-src 'self' https:; font-src 'self' https://fonts.gstatic.com; frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://open.spotify.com https://embed.acast.com https://player.vimeo.com https://w.soundcloud.com; connect-src 'self' https://cdn.jsdelivr.net https://api.github.com; base-uri 'self'; form-action 'self'"
+		Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; img-src 'self' data: https:; media-src 'self' https:; font-src 'self' https://fonts.gstatic.com; frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://open.spotify.com https://embed.acast.com https://player.vimeo.com https://w.soundcloud.com; connect-src 'self' https: https://cdn.jsdelivr.net; base-uri 'self'; form-action 'self' https:"
 	}
 
 	# ─── Media files from content volume (direct serve, not proxied) ───
@@ -90,6 +90,23 @@
 	handle /conversations* {
 		reverse_proxy indiekit:8080
 	}
+	handle /image/* {
+		reverse_proxy indiekit:8080
+	}
+
+	# ─── Feed files with WebSub Link header ───
+	handle /feed.xml {
+		header Link "<https://{$DOMAIN}/feed.xml>; rel=\"self\", <https://websubhub.com/hub>; rel=\"hub\""
+		root * /data/site
+		file_server
+	}
+	handle /feed.json {
+		header Link "<https://{$DOMAIN}/feed.json>; rel=\"self\", <https://websubhub.com/hub>; rel=\"hub\""
+		root * /data/site
+		file_server
+	}
+	redir /feed /feed.xml 301
+	redir /feed/ /feed.xml 301
 
 	# ─── Indiekit admin shortcuts ───
 	redir /admin /session/login?redirect=/dashboard
@@ -126,9 +143,10 @@
 		reverse_proxy indiekit:8080
 	}
 
-	# ─── Legacy URL redirects (old Indiekit URL format) ───
-	@legacy_articles path_regexp legacy ^/(articles|notes|bookmarks|likes|reposts|photos|replies|videos|audio|jams|rsvps|events)/(\d{4})/(\d{2})/(\d{2})/(.+)$
-	redir @legacy_articles /content/{re.legacy.1}/{re.legacy.2}-{re.legacy.3}-{re.legacy.4}-{re.legacy.5}/ 301
+	# ─── Legacy /content/ URL redirects → canonical Indiekit URLs ───
+	# Old format: /content/TYPE/YYYY-MM-DD-slug/ → /TYPE/YYYY/MM/DD/slug/
+	@legacy_content path_regexp legacy ^/content/(articles|notes|bookmarks|likes|reposts|photos|replies|videos|audio|jams|rsvps|events)/(\d{4})-(\d{2})-(\d{2})-(.+?)/?$
+	redir @legacy_content /{re.legacy.1}/{re.legacy.2}/{re.legacy.3}/{re.legacy.4}/{re.legacy.5}/ 301
 
 	# ─── Default: serve Eleventy static site ───
 	handle {

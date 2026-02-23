@@ -35,6 +35,7 @@ const plugins = [
   "@rmdes/indiekit-endpoint-webmention-sender",
   "@rmdes/indiekit-endpoint-files",
   "@rmdes/indiekit-endpoint-conversations",
+  "@rmdes/indiekit-endpoint-comments",
   // IndieNews (safe without config)
   "@rmdes/indiekit-syndicator-indienews",
   // Full profile endpoints (always loaded)
@@ -48,6 +49,7 @@ const plugins = [
   "@rmdes/indiekit-endpoint-blogroll",
   "@rmdes/indiekit-endpoint-homepage",
   "@rmdes/indiekit-endpoint-cv",
+  "@rmdes/indiekit-endpoint-activitypub",
 ];
 
 // Conditional syndicators — only load when required env vars are present
@@ -234,5 +236,31 @@ export default {
 
   "@rmdes/indiekit-endpoint-cv": {
     mountPath: "/cv",
+  },
+
+  // Comments endpoint — admin at /comments, API at /comments/api/*
+  "@rmdes/indiekit-endpoint-comments": {
+    mountPath: "/comments",
+  },
+
+  // ActivityPub federation — makes the site a full AP actor
+  "@rmdes/indiekit-endpoint-activitypub": {
+    mountPath: "/activitypub",
+    actor: {
+      handle: process.env.AP_HANDLE || process.env.AUTHOR_NAME?.toLowerCase().replace(/\s+/g, "") || "user",
+      name: process.env.AUTHOR_NAME || "Site Author",
+      summary: process.env.SITE_DESCRIPTION || "",
+      icon: process.env.AUTHOR_AVATAR || "",
+    },
+    checked: true,
+    alsoKnownAs: process.env.AP_ALSO_KNOWN_AS || "",
+    activityRetentionDays: 90,
+    storeRawActivities: false,
+    redisUrl: process.env.REDIS_URL || "",
+    parallelWorkers: 5,
+    actorType: "Person",
+    logLevel: process.env.AP_LOG_LEVEL || "info",
+    debugDashboard: process.env.AP_DEBUG === "true",
+    debugPassword: process.env.AP_DEBUG_PASSWORD || "",
   },
 };
