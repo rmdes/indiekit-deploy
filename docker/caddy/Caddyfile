@@ -148,6 +148,39 @@
 	@legacy_content path_regexp legacy ^/content/(articles|notes|bookmarks|likes|reposts|photos|replies|videos|audio|jams|rsvps|events)/(\d{4})-(\d{2})-(\d{2})-(.+?)/?$
 	redir @legacy_content /{re.legacy.1}/{re.legacy.2}/{re.legacy.3}/{re.legacy.4}/{re.legacy.5}/ 301
 
+	# ─── Markdown for Agents ───
+	# Serve clean Markdown for articles via .md URL extension
+	@article_md path_regexp article_md ^/articles/(.+)\.md$
+	handle @article_md {
+		root * /data/site
+		rewrite * /articles/{re.article_md.1}/index.md
+		header Content-Type "text/markdown; charset=utf-8"
+		header X-Robots-Tag "noindex"
+		header Link "<https://{$DOMAIN}/articles/{re.article_md.1}/>; rel=\"canonical\""
+		file_server
+	}
+
+	# Markdown requests for non-article content → 406 Not Acceptable
+	@non_article_md path_regexp non_article_md ^/(?!articles/)(.+)\.md$
+	handle @non_article_md {
+		header Content-Type "text/plain; charset=utf-8"
+		header Link "<https://{$DOMAIN}/{re.non_article_md.1}/>; rel=\"canonical\""
+		respond "No Markdown version available for this content type.{"\n"}HTML version: https://{$DOMAIN}/{re.non_article_md.1}/{"\n"}" 406
+	}
+
+	# Content negotiation: Accept: text/markdown for articles → serve .md
+	@wants_markdown_article {
+		header Accept *text/markdown*
+		path /articles/*
+	}
+	handle @wants_markdown_article {
+		root * /data/site
+		rewrite * {path}index.md
+		header Content-Type "text/markdown; charset=utf-8"
+		header X-Robots-Tag "noindex"
+		file_server
+	}
+
 	# ─── Default: serve Eleventy static site ───
 	handle {
 		root * /data/site
