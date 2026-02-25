@@ -85,6 +85,10 @@ export default {
       "links",
       "photos",
     ],
+    // Optional layouts for the post editor's layout selector
+    // layouts: [
+    //   { name: "Full width", path: "layouts/fullwidth.njk" },
+    // ],
   },
 
   plugins,
