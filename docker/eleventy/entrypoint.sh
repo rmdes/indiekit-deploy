@@ -59,7 +59,8 @@ cd /app
 }
 
 # Lower heap for watcher (initial build needed more, watcher needs less)
-export NODE_OPTIONS="--max-old-space-size=1024"
+# but 1024MB is too tight (watcher stabilizes around 1.2-1.4GB with cached data)
+export NODE_OPTIONS="--max-old-space-size=1536"
 
 # Start Eleventy watcher with exponential backoff supervisor
 echo "==> Starting Eleventy watcher"
