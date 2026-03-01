@@ -58,6 +58,9 @@ cd /app
     echo '<html><body><h1>Blog coming soon</h1><p>Create your first post at <a href="/session/login">/admin</a></p></body></html>' > /data/site/index.html
 }
 
+# Lower heap for watcher (initial build needed more, watcher needs less)
+export NODE_OPTIONS="--max-old-space-size=1024"
+
 # Start Eleventy watcher with exponential backoff supervisor
 echo "==> Starting Eleventy watcher"
 

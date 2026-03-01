@@ -6,6 +6,10 @@
 # and the caddy service to route their API endpoints.
 
 services:
+  # Redis is required for full profile (ActivityPub 2.2.0 uses Redis for Fedify KV store)
+  redis:
+    profiles: []
+
   indiekit:
     # Pre-built full image includes all @rmdes/* plugins
     # GHCR alternative: ghcr.io/rmdes/indiekit-deploy-server-full:latest
@@ -15,6 +19,11 @@ services:
       dockerfile: docker/indiekit/Dockerfile
       args:
         PROFILE: full
+    depends_on:
+      - mongodb
+      - redis
+    environment:
+      - REDIS_URL=redis://redis:6379
 
   caddy:
     volumes:

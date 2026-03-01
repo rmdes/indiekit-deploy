@@ -155,6 +155,9 @@
 	handle /cv* {
 		reverse_proxy indiekit:8080
 	}
+	handle /readlater* {
+		reverse_proxy indiekit:8080
+	}
 
 	# ─── Indiekit admin shortcuts ───
 	redir /admin /session/login?redirect=/dashboard

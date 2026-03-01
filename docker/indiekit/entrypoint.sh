@@ -31,6 +31,7 @@ if [[ ! -f /data/config/indiekit.config.js ]]; then
 fi
 
 echo "==> Starting Indiekit on port ${PORT:-8080}"
+export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=1024}"
 exec node node_modules/@indiekit/indiekit/bin/cli.js serve \
     --port "${PORT:-8080}" \
     --config /data/config/indiekit.config.js

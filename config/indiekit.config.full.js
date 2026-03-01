@@ -50,6 +50,7 @@ const plugins = [
   "@rmdes/indiekit-endpoint-homepage",
   "@rmdes/indiekit-endpoint-cv",
   "@rmdes/indiekit-endpoint-activitypub",
+  "@rmdes/indiekit-endpoint-readlater",
 ];
 
 // Conditional syndicators — only load when required env vars are present
