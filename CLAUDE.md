@@ -357,11 +357,32 @@ make update-theme    # Pull latest theme (requires make build after)
 - **TLS certificates:** Stored in `caddy_data` volume. Back up if migrating servers.
 - **Sensitive env vars:** Never commit `.env` to git. Use `.env.example` as a template.
 
-## Performance Tuning
+## Memory Tuning
 
-- **Eleventy heap size:** Set `NODE_OPTIONS=--max-old-space-size=4096` in Eleventy service for large sites
-- **Redis cache:** Uncomment Redis service in docker-compose.yml, set `REDIS_URL=redis://redis:6379` in `.env`
-- **Caddy caching:** Add `header Cache-Control` directives in Caddyfile for static assets
+Each Docker Compose service runs in its own container, but memory discipline still matters for small VPS deployments.
+
+### CRITICAL: Node.js Heap Caps
+
+| Process | Heap Cap | Set In | Why |
+|---------|----------|--------|-----|
+| **Indiekit** | 1024MB | `docker/indiekit/entrypoint.sh` (`NODE_OPTIONS`) | Indiekit + AP plugin stabilize around 300-400MB; 1024MB gives generous headroom |
+| **Eleventy initial build** | 2048MB | `docker/eleventy/entrypoint.sh` (`NODE_OPTIONS`) | Full build processes all posts, OG images, and assets |
+| **Eleventy watcher** | 1536MB | `docker/eleventy/entrypoint.sh` (reset before watcher loop) | Watcher stabilizes around 1.2-1.4GB with cached OG images and data |
+
+**Lesson learned (Feb/Mar 2026):** The watcher heap cap was initially set to 1024MB to save memory, but this caused repeated OOM kills because the watcher genuinely needs ~1.2-1.4GB for incremental rebuilds with cached image data. 1536MB is the minimum safe value — do NOT lower it below this.
+
+### Redis for Fedify KV Store
+
+As of AP plugin 2.2.0, the Fedify KV store and plugin cache use Redis instead of MongoDB's `ap_kv` collection. This prevents unbounded memory growth from the old `ap_kv` collection (~14K entries/day).
+
+- **Core profile:** Redis is optional (gated by `profiles: [redis]` in `docker-compose.yml`)
+- **Full profile:** Redis is **mandatory** — `docker-compose.full.yml` overrides the profile gate and sets `REDIS_URL=redis://redis:6379`
+
+Redis provides native TTL support so idempotence keys and cache entries auto-expire. The Fedify KV store uses `fedify::` key prefix, the plugin cache uses `indiekit:` key prefix.
+
+### Caddy Caching
+
+Add `header Cache-Control` directives in Caddyfile for static assets (already configured for media files with 30-day immutable cache).
 
 ## Development Mode
 
