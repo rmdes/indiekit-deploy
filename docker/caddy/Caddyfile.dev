@@ -149,7 +149,7 @@ localhost {
 
 	# ─── Default: serve Eleventy static site ───
 	handle {
-		root * /data/site
+		root * /data/site/current
 		try_files {path} {path}/ {path}.html
 		file_server
 	}

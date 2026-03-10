@@ -97,12 +97,12 @@
 	# ─── Feed files with WebSub Link header ───
 	handle /feed.xml {
 		header Link "<https://{$DOMAIN}/feed.xml>; rel=\"self\", <https://websubhub.com/hub>; rel=\"hub\""
-		root * /data/site
+		root * /data/site/current
 		file_server
 	}
 	handle /feed.json {
 		header Link "<https://{$DOMAIN}/feed.json>; rel=\"self\", <https://websubhub.com/hub>; rel=\"hub\""
-		root * /data/site
+		root * /data/site/current
 		file_server
 	}
 	redir /feed /feed.xml 301
@@ -152,7 +152,7 @@
 	# Serve clean Markdown for articles via .md URL extension
 	@article_md path_regexp article_md ^/articles/(.+)\.md$
 	handle @article_md {
-		root * /data/site
+		root * /data/site/current
 		rewrite * /articles/{re.article_md.1}/index.md
 		header Content-Type "text/markdown; charset=utf-8"
 		header X-Robots-Tag "noindex"
@@ -174,7 +174,7 @@
 		path /articles/*
 	}
 	handle @wants_markdown_article {
-		root * /data/site
+		root * /data/site/current
 		rewrite * {path}index.md
 		header Content-Type "text/markdown; charset=utf-8"
 		header X-Robots-Tag "noindex"
@@ -183,7 +183,7 @@
 
 	# ─── Default: serve Eleventy static site ───
 	handle {
-		root * /data/site
+		root * /data/site/current
 		try_files {path} {path}/ {path}.html
 		file_server
 	}

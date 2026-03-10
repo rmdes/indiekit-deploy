@@ -2,14 +2,35 @@
 set -eu
 
 INDIEKIT_URL="${INDIEKIT_URL:-http://indiekit:8080}"
+RELEASES_DIR="/data/site/releases"
+CURRENT_LINK="/data/site/current"
 
 echo "==> Eleventy entrypoint"
 
 # Ensure output directories exist
-mkdir -p /data/site /data/cache
+mkdir -p /data/site /data/cache "$RELEASES_DIR"
+
+# Migrate from flat /data/site to releases structure (first run after upgrade)
+# If /data/site/current doesn't exist but there are HTML files at the root,
+# the volume has old-style flat content — move it into a release.
+if [ ! -L "$CURRENT_LINK" ] && [ ! -d "$CURRENT_LINK" ]; then
+    if ls /data/site/*.html >/dev/null 2>&1; then
+        echo "==> Migrating flat /data/site to releases structure"
+        MIGRATE_TS=$(date +%s)
+        mkdir -p "${RELEASES_DIR}/${MIGRATE_TS}"
+        # Move everything except releases/ into the migration release
+        for item in /data/site/*; do
+            case "$(basename "$item")" in
+                releases) ;; # skip
+                *) mv "$item" "${RELEASES_DIR}/${MIGRATE_TS}/" 2>/dev/null || true ;;
+            esac
+        done
+        ln -s "releases/${MIGRATE_TS}" "$CURRENT_LINK"
+        echo "==> Migrated existing site to release ${MIGRATE_TS}"
+    fi
+fi
 
 # Ensure Eleventy directory data files exist (set default layouts for content)
-# Same as production: content.json for all posts, pages/pages.json for pages
 if [ ! -f /data/content/content.json ]; then
     echo '{"layout":"layouts/post.njk"}' > /data/content/content.json
     echo "  Created content.json (default layout for posts)"
@@ -36,33 +57,55 @@ done
 # Wait for API endpoints to initialize
 sleep 3
 
-# Clear stale site files
-echo "==> Clearing stale site files"
-rm -rf /data/site/*
-
 # Clear Eleventy fetch cache (force fresh API data on restart)
 rm -rf /data/cache/eleventy-fetch-*
 
-# Create placeholder during build
-echo '<html><head><meta http-equiv="refresh" content="5"></head><body><p>Building site...</p></body></html>' > /data/site/index.html
+# Create placeholder in current release while building
+# (if no current release exists yet, create one with placeholder)
+if [ ! -L "$CURRENT_LINK" ] && [ ! -d "$CURRENT_LINK" ]; then
+    PLACEHOLDER_TS=$(date +%s)
+    mkdir -p "${RELEASES_DIR}/${PLACEHOLDER_TS}"
+    echo '<html><head><meta http-equiv="refresh" content="5"></head><body><p>Building site...</p></body></html>' > "${RELEASES_DIR}/${PLACEHOLDER_TS}/index.html"
+    ln -s "releases/${PLACEHOLDER_TS}" "$CURRENT_LINK"
+    echo "==> Created placeholder release ${PLACEHOLDER_TS}"
+fi
 
-# Increase Node.js heap size for large sites
-export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=2048}"
+# Increase Node.js heap size for large sites + enable GC for OG batch spawning
+export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=2048 --expose-gc}"
 
-# Initial build
+# ─── Initial build with atomic release swap ───
 echo "==> Building Eleventy site"
+RELEASE_TS=$(date +%s)
+NEW_RELEASE="${RELEASES_DIR}/${RELEASE_TS}"
+mkdir -p "${NEW_RELEASE}"
+
 cd /app
-./node_modules/.bin/eleventy --output=/data/site || {
-    echo "==> Eleventy build failed, keeping placeholder"
-    mkdir -p /data/site
-    echo '<html><body><h1>Blog coming soon</h1><p>Create your first post at <a href="/session/login">/admin</a></p></body></html>' > /data/site/index.html
-}
+if ./node_modules/.bin/eleventy --output="${NEW_RELEASE}"; then
+    # Atomic swap: create temp symlink then rename over current (rename(2) is atomic)
+    ln -s "releases/${RELEASE_TS}" /data/site/current_tmp
+    mv -T /data/site/current_tmp "$CURRENT_LINK"
+    echo "==> Swapped to release ${RELEASE_TS}"
 
-# Lower heap for watcher (initial build needed more, watcher needs less)
-# but 1024MB is too tight (watcher stabilizes around 1.2-1.4GB with cached data)
-export NODE_OPTIONS="--max-old-space-size=1536"
+    # Cleanup: keep only 2 most recent releases for rollback
+    cd "$RELEASES_DIR" && ls -1t | tail -n +3 | xargs -r rm -rf
+    cd /app
+else
+    echo "==> Eleventy build failed"
+    rm -rf "${NEW_RELEASE}"
+    # If no current release, create fallback
+    if [ ! -L "$CURRENT_LINK" ]; then
+        FALLBACK_TS=$(date +%s)
+        mkdir -p "${RELEASES_DIR}/${FALLBACK_TS}"
+        echo '<html><body><h1>Blog coming soon</h1><p>Create your first post at <a href="/session/login">/admin</a></p></body></html>' > "${RELEASES_DIR}/${FALLBACK_TS}/index.html"
+        ln -s "releases/${FALLBACK_TS}" "$CURRENT_LINK"
+    fi
+fi
 
-# Start Eleventy watcher with exponential backoff supervisor
+# ─── Watcher with GC support and exponential backoff ───
+# Watcher needs 2048 MB for incremental rebuilds + OG batch spawning.
+# --expose-gc enables the post-build GC hook in eleventy.config.js.
+export NODE_OPTIONS="--max-old-space-size=2048 --expose-gc"
+
 echo "==> Starting Eleventy watcher"
 
 RESTART_COUNT=0
@@ -94,7 +137,10 @@ while true; do
         fi
     fi
 
-    ./node_modules/.bin/eleventy --watch --incremental --output=/data/site || true
+    # Watcher outputs directly to current release (incremental updates are fine in-place)
+    # Resolve the symlink target so Eleventy writes to the actual directory
+    CURRENT_TARGET=$(readlink -f "$CURRENT_LINK" 2>/dev/null || echo "/data/site/current")
+    ./node_modules/.bin/eleventy --watch --incremental --output="${CURRENT_TARGET}" || true
     EXIT_CODE=$?
     echo "[eleventy-watcher] Exited with code $EXIT_CODE at $(date '+%Y-%m-%d %H:%M:%S')"
 done

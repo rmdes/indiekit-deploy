@@ -17,12 +17,12 @@ Internet
   |
 Caddy :443 (auto HTTPS via Let's Encrypt)
   |
-  ├─ Static site (Eleventy) → /data/site (read-only)
+  ├─ Static site (Eleventy) → /data/site/current (read-only, symlink to latest release)
   ├─ Uploads → /data/uploads (read-only)
   └─ API endpoints → Indiekit :8080 (reverse proxy)
        |
        ├─ MongoDB (data store)
-       ├─ Eleventy (watches /data/content, rebuilds to /data/site)
+       ├─ Eleventy (watches /data/content, atomic release swap to /data/site/releases/)
        └─ Cron sidecar (syndication every 2m, webmentions every 5m)
 ```
 
@@ -40,8 +40,8 @@ Caddy :443 (auto HTTPS via Let's Encrypt)
 ### Data Flow
 
 1. **Post Creation**: User creates post via Micropub → Indiekit writes Markdown to `/data/content/TYPE/YYYY-MM-DD-slug.md`
-2. **Static Site Build**: Eleventy watcher detects file change → rebuilds HTML to `/data/site/`
-3. **Web Serving**: Caddy serves static HTML from `/data/site/`, proxies `/micropub`, `/session`, etc. to Indiekit
+2. **Static Site Build**: Eleventy builds to `/data/site/releases/TIMESTAMP/`, atomically swaps `/data/site/current` symlink
+3. **Web Serving**: Caddy serves static HTML from `/data/site/current/`, proxies `/micropub`, `/session`, etc. to Indiekit
 4. **Syndication**: Cron runs `syndicate.sh` every 2 minutes → POSTs to Indiekit `/syndicate` endpoint → syndicates to Mastodon/Bluesky/LinkedIn
 
 ### Volume Mounts
@@ -278,6 +278,9 @@ make restore FILE=backups/indiekit-*.tar.gz
 | **Plugin profiles** | All plugins pre-installed, activated by config | Core by default, full via `docker-compose.full.yml` |
 | **Updates** | `cloudron build && cloudron update` | `git pull && make build && make up` |
 | **Eleventy theme** | Submodule + `overrides/eleventy-site/` (merged by `make prepare`) | Submodule + `docker/eleventy/overrides/` (merged by Dockerfile) |
+| **Zero-downtime** | Atomic release swap (`mv -T`) | Atomic release swap (`mv -T`) |
+| **Memory tuning** | `--expose-gc`, OG batch spawning, 2048MB watcher | `--expose-gc`, OG batch spawning, 2048MB watcher |
+| **Patches** | routes.js, error.js, indieauth.js | routes.js, error.js, indieauth.js |
 
 **Common points:**
 - Both use the same Eleventy theme (`indiekit-eleventy-theme`) as a Git submodule
@@ -367,9 +370,34 @@ Each Docker Compose service runs in its own container, but memory discipline sti
 |---------|----------|--------|-----|
 | **Indiekit** | 1024MB | `docker/indiekit/entrypoint.sh` (`NODE_OPTIONS`) | Indiekit + AP plugin stabilize around 300-400MB; 1024MB gives generous headroom |
 | **Eleventy initial build** | 2048MB | `docker/eleventy/entrypoint.sh` (`NODE_OPTIONS`) | Full build processes all posts, OG images, and assets |
-| **Eleventy watcher** | 1536MB | `docker/eleventy/entrypoint.sh` (reset before watcher loop) | Watcher stabilizes around 1.2-1.4GB with cached OG images and data |
+| **Eleventy watcher** | 2048MB | `docker/eleventy/entrypoint.sh` (reset before watcher loop) | Watcher stabilizes around 1.2-1.4GB; needs headroom for OG batch spawning during rebuilds |
+| **og-cli** | 512MB | `eleventy.config.js` (`--max-old-space-size=512 --expose-gc`) | V8 heap only uses ~22 MB; WASM native memory is the real consumer (not limited by this flag) |
 
-**Lesson learned (Feb/Mar 2026):** The watcher heap cap was initially set to 1024MB to save memory, but this caused repeated OOM kills because the watcher genuinely needs ~1.2-1.4GB for incremental rebuilds with cached image data. 1536MB is the minimum safe value — do NOT lower it below this.
+**Lesson learned (Feb/Mar 2026):** The watcher heap cap was initially set to 1024MB to save memory, but this caused repeated OOM kills because the watcher genuinely needs ~1.2-1.4GB for incremental rebuilds with cached image data. 2048MB matches Cloudron's production setting. `--expose-gc` enables the post-build GC hook in `eleventy.config.js` and the OG batch spawning GC in `og-cli`.
+
+### Zero-Downtime Build (Atomic Release Swap)
+
+On container restart, the old site continues serving while a new release builds:
+
+```
+Eleventy starts → builds to /data/site/releases/NEW/
+Build completes → atomic symlink swap: ln -s releases/NEW current_tmp && mv -T current_tmp current
+Caddy serves from /data/site/current/ → sees new content immediately
+Watcher starts with --watch --incremental → outputs to resolved current target
+Cleanup: keep 2 most recent releases for rollback
+```
+
+**Visitors experience:** Old content during build, then seamlessly new content. Zero 404s during container restarts.
+
+**First-run migration:** If `/data/site` has old-style flat content (from before the atomic swap), the entrypoint automatically migrates it into a release directory.
+
+**Rollback:** `ln -sfn releases/OLD_TIMESTAMP /data/site/current` inside the Eleventy container.
+
+### OG Image Generator — Batch Spawning
+
+The updated Eleventy theme includes OG image generation using Satori (WASM) + Resvg (WASM). These allocate native memory outside V8's heap. The theme uses **batch spawning** — each invocation generates up to 100 images, then exits. The spawner re-loops until all images are generated. This keeps peak RSS at ~460 MB per batch.
+
+Requires `--expose-gc` on the watcher (set in entrypoint.sh) to enable GC hooks that reclaim WASM native memory between images.
 
 ### Redis for Fedify KV Store
 
