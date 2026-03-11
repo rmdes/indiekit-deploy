@@ -57,8 +57,11 @@ done
 # Wait for API endpoints to initialize
 sleep 3
 
-# Clear Eleventy fetch cache (force fresh API data on restart)
-rm -rf /data/cache/eleventy-fetch-*
+# Eleventy-fetch cache is NOT wiped on restart. Each entry has its own TTL
+# (duration: "1d" for build, "4h" for watch) and expires naturally.
+# Wiping forces ALL _data files to re-fetch from APIs simultaneously,
+# which can cause OOM during the initial build.
+# If you need to force a fresh fetch, delete specific cache files manually.
 
 # Create placeholder in current release while building
 # (if no current release exists yet, create one with placeholder)
@@ -81,6 +84,17 @@ mkdir -p "${NEW_RELEASE}"
 
 cd /app
 if ./node_modules/.bin/eleventy --output="${NEW_RELEASE}"; then
+    # Sync OG images from persistent cache to new release.
+    # eleventy.before generates OG images to .cache/og/ (→ /data/cache/og/),
+    # but passthrough copy may miss them when --output differs from _site symlink.
+    if [ -d /data/cache/og ]; then
+        echo "==> Syncing OG images from cache to new release"
+        mkdir -p "${NEW_RELEASE}/og"
+        cp -f /data/cache/og/*.png "${NEW_RELEASE}/og/" 2>/dev/null || true
+        OG_COUNT=$(ls -1 "${NEW_RELEASE}/og/"*.png 2>/dev/null | wc -l)
+        echo "==> Synced ${OG_COUNT} OG images"
+    fi
+
     # Atomic swap: create temp symlink then rename over current (rename(2) is atomic)
     ln -s "releases/${RELEASE_TS}" /data/site/current_tmp
     mv -T /data/site/current_tmp "$CURRENT_LINK"
@@ -104,7 +118,7 @@ fi
 # ─── Watcher with GC support and exponential backoff ───
 # Watcher needs 2048 MB for incremental rebuilds + OG batch spawning.
 # --expose-gc enables the post-build GC hook in eleventy.config.js.
-export NODE_OPTIONS="--max-old-space-size=2048 --expose-gc"
+export NODE_OPTIONS="--max-old-space-size=2048 --expose-gc --heapsnapshot-signal=SIGUSR2 --diagnostic-dir=/tmp"
 
 echo "==> Starting Eleventy watcher"
 

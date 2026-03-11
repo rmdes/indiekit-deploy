@@ -370,7 +370,7 @@ Each Docker Compose service runs in its own container, but memory discipline sti
 |---------|----------|--------|-----|
 | **Indiekit** | 1024MB | `docker/indiekit/entrypoint.sh` (`NODE_OPTIONS`) | Indiekit + AP plugin stabilize around 300-400MB; 1024MB gives generous headroom |
 | **Eleventy initial build** | 2048MB | `docker/eleventy/entrypoint.sh` (`NODE_OPTIONS`) | Full build processes all posts, OG images, and assets |
-| **Eleventy watcher** | 2048MB | `docker/eleventy/entrypoint.sh` (reset before watcher loop) | Watcher stabilizes around 1.2-1.4GB; needs headroom for OG batch spawning during rebuilds |
+| **Eleventy watcher** | 2048MB | `docker/eleventy/entrypoint.sh` (`--max-old-space-size=2048 --expose-gc --heapsnapshot-signal=SIGUSR2 --diagnostic-dir=/tmp`) | Watcher stabilizes around 1.2-1.4GB; needs headroom for OG batch spawning during rebuilds. SIGUSR2 triggers on-demand heap snapshots to `/tmp`. |
 | **og-cli** | 512MB | `eleventy.config.js` (`--max-old-space-size=512 --expose-gc`) | V8 heap only uses ~22 MB; WASM native memory is the real consumer (not limited by this flag) |
 
 **Lesson learned (Feb/Mar 2026):** The watcher heap cap was initially set to 1024MB to save memory, but this caused repeated OOM kills because the watcher genuinely needs ~1.2-1.4GB for incremental rebuilds with cached image data. 2048MB matches Cloudron's production setting. `--expose-gc` enables the post-build GC hook in `eleventy.config.js` and the OG batch spawning GC in `og-cli`.
