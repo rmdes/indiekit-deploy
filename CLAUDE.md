@@ -279,7 +279,7 @@ make restore FILE=backups/indiekit-*.tar.gz
 | **Updates** | `cloudron build && cloudron update` | `git pull && make build && make up` |
 | **Eleventy theme** | Submodule + `overrides/eleventy-site/` (merged by `make prepare`) | Submodule + `docker/eleventy/overrides/` (merged by Dockerfile) |
 | **Zero-downtime** | Atomic release swap (`mv -T`) | Atomic release swap (`mv -T`) |
-| **Memory tuning** | `--expose-gc`, OG batch spawning, 2048MB watcher | `--expose-gc`, OG batch spawning, 2048MB watcher |
+| **Memory tuning** | `--expose-gc`, OG batch spawning, 2560MB watcher, heap diagnostics | `--expose-gc`, OG batch spawning, 2048MB watcher, heap diagnostics |
 | **Patches** | routes.js, error.js, indieauth.js | routes.js, error.js, indieauth.js |
 
 **Common points:**
@@ -298,9 +298,10 @@ make restore FILE=backups/indiekit-*.tar.gz
 
 ### Eleventy shows "Building site..."
 
-- **Cause:** Eleventy is still building (can take 30-60s for first build)
+- **Cause:** Eleventy is still building (~3 min warm with caches, ~20 min cold on first deploy)
 - **Fix:** Wait and refresh. If it persists, check `docker compose logs eleventy`
 - **Fallback:** If build fails, Eleventy shows "Blog coming soon" page
+- **Cold vs warm:** A cold build regenerates all OG images and fetches all unfurl/API data from scratch. Warm builds reuse caches in `/data/cache/` (persisted across restarts via Docker volume)
 
 ### Posts don't appear on site
 
@@ -381,17 +382,30 @@ On container restart, the old site continues serving while a new release builds:
 
 ```
 Eleventy starts → builds to /data/site/releases/NEW/
+OG images synced from /data/cache/og/ to NEW/og/ (passthrough copy misses them with --output)
 Build completes → atomic symlink swap: ln -s releases/NEW current_tmp && mv -T current_tmp current
 Caddy serves from /data/site/current/ → sees new content immediately
 Watcher starts with --watch --incremental → outputs to resolved current target
 Cleanup: keep 2 most recent releases for rollback
 ```
 
-**Visitors experience:** Old content during build, then seamlessly new content. Zero 404s during container restarts.
+**Visitors experience:** Old content during build (~3 min warm, ~20 min cold), then seamlessly new content. Zero 404s during container restarts.
 
 **First-run migration:** If `/data/site` has old-style flat content (from before the atomic swap), the entrypoint automatically migrates it into a release directory.
 
 **Rollback:** `ln -sfn releases/OLD_TIMESTAMP /data/site/current` inside the Eleventy container.
+
+### CRITICAL: Eleventy-Fetch Cache Preservation
+
+The eleventy-fetch cache (`/data/cache/`) is **NOT wiped on container restart**. Each cache entry has its own TTL (`"1d"` for build mode, `"4h"` for watch mode via `lib/data-fetch.js`) and expires naturally.
+
+**Do NOT** add `rm -rf /data/cache/eleventy-fetch-*` to the entrypoint. Wiping forces ALL 13+ data files to re-fetch from external APIs simultaneously during the initial build, which can cause OOM. This was a hard-won lesson from Cloudron production.
+
+If you need to force a fresh fetch for a specific data source, delete only that source's cache file manually:
+```bash
+docker compose exec eleventy rm -rf /data/cache/eleventy-fetch-*github*
+docker compose restart eleventy
+```
 
 ### OG Image Generator — Batch Spawning
 
@@ -411,6 +425,54 @@ Redis provides native TTL support so idempotence keys and cache entries auto-exp
 ### Caddy Caching
 
 Add `header Cache-Control` directives in Caddyfile for static assets (already configured for media files with 30-day immutable cache).
+
+### On-Demand Heap Snapshots
+
+The watcher runs with `--heapsnapshot-signal=SIGUSR2 --diagnostic-dir=/tmp`. To capture a heap snapshot for memory analysis:
+
+```bash
+# Find the watcher PID inside the container
+docker compose exec eleventy pgrep -f "eleventy.*watch"
+# Trigger snapshot
+docker compose exec eleventy kill -USR2 <PID>
+# Copy snapshot out
+docker compose cp eleventy:/tmp/Heap.*.heapsnapshot ./
+```
+
+## Eleventy Performance Optimizations (Mar 2026)
+
+The theme includes several performance optimizations that dramatically reduce incremental rebuild times:
+
+### Data File Caching (`lib/data-fetch.js`)
+
+A shared `cachedFetch` helper wraps `@11ty/eleventy-fetch` with:
+- **Watch-mode cache extension:** During `ELEVENTY_RUN_MODE !== "build"`, cache duration extends to 4 hours (vs 5-15 min default). This prevents 13 network data files from re-fetching APIs on every incremental rebuild.
+- **AbortController timeout:** 10-second hard timeout on all network requests to prevent slow APIs from hanging the build.
+
+Result: Data File phase went from 12,169ms → 28ms on incremental rebuilds (99.8% reduction).
+
+### Filter Memoization (`eleventy.config.js`)
+
+Nunjucks filters called thousands of times per build are memoized with `Map` caches cleared on `eleventy.before`:
+- `dateDisplay`, `date`, `isoDate` — date formatting
+- `hash` — MD5 file hashing for cache busting
+- `aiPosts`, `aiStats` — computed data
+
+### html-transformer Pre-Check
+
+The default `@11ty/eleventy/html-transformer` transform is overridden with a pre-check that skips the full PostHTML parse/serialize cycle (~3ms/page) for pages without `<img>` tags.
+
+### Build Time Reference
+
+| Build Type | Time | Pages | Notes |
+|------------|------|-------|-------|
+| Cold build (empty caches) | ~20 min | 3,400+ | First deploy or after wiping cache volume. Regenerates all OG images, fetches all unfurl URLs, all API data files |
+| Warm build (caches populated) | ~3 min | 3,400+ | Normal container restart. OG manifest skips existing images, unfurl/data caches hit disk |
+| Incremental rebuild (watcher) | ~25s | ~1,000 written, ~2,400 skipped | Triggered by content changes. Data files cached 4h in watch mode |
+
+**What makes a build "cold":** The OG manifest (`.cache/og/manifest.json`), unfurl cache (`.cache/unfurl/`), and eleventy-fetch cache (`.cache/eleventy-fetch/`) are empty. This happens on first deploy or if the `cache` Docker volume is wiped.
+
+**What makes a build "warm":** Caches are populated from a previous build in the persistent `cache` Docker volume. OG generation only processes new/changed posts (manifest-based diffing). Unfurl URLs and API data are served from disk cache. The dominant cost is template rendering + Pagefind indexing (~2-3 min).
 
 ## Development Mode
 
