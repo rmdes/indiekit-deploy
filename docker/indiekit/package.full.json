@@ -51,8 +51,8 @@
     "@rmdes/indiekit-endpoint-homepage": "1.0.22",
     "@rmdes/indiekit-endpoint-cv": "1.0.24",
     "@rmdes/indiekit-endpoint-conversations": "2.1.6",
-    "@rmdes/indiekit-endpoint-comments": "1.0.0",
-    "@rmdes/indiekit-endpoint-readlater": "1.0.4",
-    "@rmdes/indiekit-endpoint-activitypub": "2.8.1"
+    "@rmdes/indiekit-endpoint-comments": "1.0.7",
+    "@rmdes/indiekit-endpoint-readlater": "1.0.5",
+    "@rmdes/indiekit-endpoint-activitypub": "2.10.1"
   }
 }
