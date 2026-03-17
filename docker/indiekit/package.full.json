@@ -53,6 +53,6 @@
     "@rmdes/indiekit-endpoint-conversations": "2.3.0",
     "@rmdes/indiekit-endpoint-comments": "1.0.12",
     "@rmdes/indiekit-endpoint-readlater": "1.0.5",
-    "@rmdes/indiekit-endpoint-activitypub": "2.12.1"
+    "@rmdes/indiekit-endpoint-activitypub": "2.14.0"
   }
 }
