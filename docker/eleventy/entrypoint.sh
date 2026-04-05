@@ -76,38 +76,41 @@ fi
 # Increase Node.js heap size for large sites + enable GC for OG batch spawning
 export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=2048 --expose-gc}"
 
-# ─── Initial build with atomic release swap ───
-echo "==> Building Eleventy site"
-RELEASE_TS=$(date +%s)
-NEW_RELEASE="${RELEASES_DIR}/${RELEASE_TS}"
-mkdir -p "${NEW_RELEASE}"
-
+# ─── Initial build DISABLED ───
+# The initial build consistently OOMs on memory-constrained hosts because Eleventy
+# peaks at ~3GB+ RSS (V8 heap + Sharp buffers + OG WASM). The watcher always succeeds
+# because it starts fresh after any failed process exits. The old release (or placeholder)
+# serves during the watcher's ~5 min full build — zero downtime.
+# To re-enable: uncomment the block below and comment the INITIAL_BUILD_OK=false line.
+INITIAL_BUILD_OK=false
 cd /app
-if ./node_modules/.bin/eleventy --output="${NEW_RELEASE}"; then
-    # Sync OG images from persistent cache to new release.
-    # eleventy.before generates OG images to .cache/og/ (→ /data/cache/og/),
-    # but passthrough copy may miss them when --output differs from _site symlink.
-    if [ -d /data/cache/og ]; then
-        echo "==> Syncing OG images from cache to new release"
-        mkdir -p "${NEW_RELEASE}/og"
-        cp -f /data/cache/og/*.png "${NEW_RELEASE}/og/" 2>/dev/null || true
-        OG_COUNT=$(ls -1 "${NEW_RELEASE}/og/"*.png 2>/dev/null | wc -l)
-        echo "==> Synced ${OG_COUNT} OG images"
-    fi
 
-    # Atomic swap: create temp symlink then rename over current (rename(2) is atomic)
-    ln -s "releases/${RELEASE_TS}" /data/site/current_tmp
-    mv -T /data/site/current_tmp "$CURRENT_LINK"
-    echo "==> Swapped to release ${RELEASE_TS}"
+# # RELEASE_TS=$(date +%s)
+# # NEW_RELEASE="${RELEASES_DIR}/${RELEASE_TS}"
+# # mkdir -p "${NEW_RELEASE}"
+# # echo "==> Building Eleventy site"
+# # if ./node_modules/.bin/eleventy --output="${NEW_RELEASE}"; then
+# #     if [ -d /data/cache/og ]; then
+# #         mkdir -p "${NEW_RELEASE}/og"
+# #         cp -f /data/cache/og/*.png "${NEW_RELEASE}/og/" 2>/dev/null || true
+# #     fi
+# #     ln -s "releases/${RELEASE_TS}" /data/site/current_tmp
+# #     mv -T /data/site/current_tmp "$CURRENT_LINK"
+# #     echo "==> Swapped to release ${RELEASE_TS}"
+# #     cd "$RELEASES_DIR" && ls -1t | tail -n +3 | xargs -r rm -rf
+# #     cd /app
+# #     INITIAL_BUILD_OK=true
+# # else
+# #     echo "==> Eleventy build failed"
+# #     rm -rf "${NEW_RELEASE}"
+# # fi
 
-    # Cleanup: keep only 2 most recent releases for rollback
-    cd "$RELEASES_DIR" && ls -1t | tail -n +3 | xargs -r rm -rf
-    cd /app
-else
-    echo "==> Eleventy build failed"
-    rm -rf "${NEW_RELEASE}"
-    # If no current release, create fallback
-    if [ ! -L "$CURRENT_LINK" ]; then
+if [ "$INITIAL_BUILD_OK" != true ]; then
+    echo "==> Initial build skipped/failed, using previous release"
+    # Clean up failed release directory if one was created
+    if [ -n "${NEW_RELEASE:-}" ]; then rm -rf "${NEW_RELEASE}"; fi
+    # If no current release exists at all, create a fallback
+    if [ ! -L "$CURRENT_LINK" ] && [ ! -d "$CURRENT_LINK" ]; then
         FALLBACK_TS=$(date +%s)
         mkdir -p "${RELEASES_DIR}/${FALLBACK_TS}"
         echo '<html><body><h1>Blog coming soon</h1><p>Create your first post at <a href="/session/login">/admin</a></p></body></html>' > "${RELEASES_DIR}/${FALLBACK_TS}/index.html"
