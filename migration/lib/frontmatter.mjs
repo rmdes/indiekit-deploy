@@ -16,12 +16,18 @@ export function writeMarkdown(post) {
   const fm = {};
   fm.date = post.date;
   fm.layout = "layouts/post.njk";
+  // Pages need an explicit permalink so Eleventy renders at /<slug>/
+  // instead of the default filesystem URL /pages/<slug>/. preset-eleventy
+  // adds permalink for page-type posts written via Indiekit; we mirror
+  // that here for migrated pages.
+  if (post.type === "page") fm.permalink = `/${post.slug}/`;
   if (post.title) fm.title = post.title;
   if (post.category && post.category.length === 1) {
     fm.category = post.category[0];
   } else if (post.category && post.category.length > 1) {
     fm.category = post.category;
   }
+  if (post.photo && post.photo.length) fm.photo = post.photo;
   if (post.likeOf) fm["like-of"] = post.likeOf;
   if (post.repostOf) fm["repost-of"] = post.repostOf;
   if (post.inReplyTo) fm["in-reply-to"] = post.inReplyTo;
@@ -35,9 +41,19 @@ export function writeMarkdown(post) {
 
 /**
  * Path inside staged/content/ where this post should be written.
- * Matches Indiekit's preset-eleventy convention: <type-plural>/YYYY-MM-DD-slug.md
+ *
+ * Regular posts use Indiekit's preset-eleventy convention:
+ *   <type-plural>/YYYY-MM-DD-slug.md   →  Eleventy renders at /TYPE/YYYY/MM/DD/slug/
+ *
+ * Pages drop the date prefix so the theme's eleventyComputed regex
+ * (which matches `content/<type>/YYYY-MM-DD-slug.md`) doesn't fire and
+ * synthesize a wrong dated URL. Pages render at /<slug>/ instead.
+ *   pages/<slug>.md                    →  Eleventy renders at /<slug>/
  */
 export function targetPath(post) {
+  if (post.type === "page") {
+    return `pages/${post.slug}.md`;
+  }
   const dateStr = post.date.toISOString().slice(0, 10);
   return `${pluralize(post.type)}/${dateStr}-${post.slug}.md`;
 }

@@ -11,6 +11,7 @@
  * @property {string} body
  * @property {string} [originalUrl]
  * @property {string[]} media
+ * @property {string[]} photo
  * @property {string} [likeOf]
  * @property {string} [repostOf]
  * @property {string} [inReplyTo]
@@ -75,6 +76,7 @@ export function makePost(partial) {
     body: partial.body,
     originalUrl: partial.originalUrl || undefined,
     media: Array.isArray(partial.media) ? partial.media : [],
+    photo: Array.isArray(partial.photo) ? partial.photo.filter(Boolean) : [],
     likeOf: partial.likeOf || undefined,
     repostOf: partial.repostOf || undefined,
     inReplyTo: partial.inReplyTo || undefined,

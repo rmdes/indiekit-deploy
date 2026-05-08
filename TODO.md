@@ -8,7 +8,7 @@ Tracks open work on the migration tool and related infrastructure.
 |------|--------|
 | Hugo adapter | ✅ shipped, verified end-to-end on localhost |
 | Jekyll adapter | ⚠️ shipped, **untested with real Jekyll content** |
-| micro.blog adapter | ✅ migration path proven (rmendes.net runs on a real micro.blog → Indiekit migration; reference output at `indiekit-cloudron/migrated-content/`); ⚠️ new generic adapter partially verified against `~/code/Blog-Archives/blog.rmendes.net-2026/` — classification + URL preservation work, but **3 adapter bugs found** (see "micro.blog adapter bugs" below) |
+| micro.blog adapter | ✅ migration path proven (rmendes.net runs on a real micro.blog → Indiekit migration; reference output at `indiekit-cloudron/migrated-content/`); ✅ new generic adapter verified against `~/code/Blog-Archives/blog.rmendes.net-2026/` — 2 of 3 bugs found and fixed (top-level page misclass + photo URL loss); 1 wontfix (syndication metadata, intentional drop) |
 | Ghost adapter | ❌ not started |
 | WordPress (WXR) adapter | ❌ not started |
 | Eleventy-to-Eleventy adapter | ❌ not started |
@@ -62,97 +62,65 @@ produces equivalent output when fed a fresh micro.blog Hugo export.
       mostly delegates to the Hugo guide, OR fold a "micro.blog
       notes" section into the Hugo guide
 
-### micro.blog adapter bugs (found 2026-05-08)
+### micro.blog adapter bugs (verified 2026-05-08)
 
 Test setup: 4 representative files from
 `~/code/Blog-Archives/blog.rmendes.net-2026/` (a real micro.blog Hugo
-export) run through `make migrate-convert`. What worked: auto-detect
-picked `microblog`, status posts classified as note via title
-fallback, titled posts as article, photo posts via `images:`
-frontmatter signal, redirects pulled real `url:` from frontmatter.
-What broke:
+export) run through `make migrate-convert`. What worked from the
+start: auto-detect picked `microblog`, status posts classified as
+note via title fallback, titled posts as article, photo posts via
+`images:` frontmatter signal, redirects pulled real `url:` from
+frontmatter.
 
-#### Bug 1: Top-level pages misclassify as articles
+#### Bug 1: Top-level pages misclassify as articles — ✅ FIXED
 
 **Symptom:** `content/about.md` (root-level file with `url: /about/`,
-`menu: main`, `weight: 2`) lands in `articles/` and the redirect maps
-`/about/` → `/articles/2024/12/08/about/`. Should be a page (no date
-in URL, no synthetic year/month/day prefix).
+`menu: main`) was landing in `articles/` with a synthetic dated URL.
 
-**Root cause:** `migration/adapters/hugo.mjs:sectionFor()` extracts
-`parts[1]` as the section. For `content/about.md`, `parts[1]` is
-`about.md` — not in `SECTION_HINTS`. Falls through the classifier to
-"has title → article".
+**Root cause:** `hugo.mjs:sectionFor()` returned the filename
+(`about.md`) for root-level files; that didn't match `SECTION_HINTS`,
+so the classifier fell through to "has title → article".
 
-**Fix shape:** in `hugo.mjs`, detect "file directly under content/"
-(parts.length === 2) and treat as page, OR check for page-typical
-frontmatter (`menu:`, `weight:`, `navigation:`, single-segment `url:
-/<slug>/`). Honor that as a page hint before classifier rule 6.
+**Fix:** in `hugo.mjs`, when `path.dirname(rel) === "content"`, set
+`folderHint = "page"`. Also in `frontmatter.mjs`: pages skip the date
+prefix in their filename (`pages/<slug>.md` not `pages/YYYY-MM-DD-...`)
+and emit `permalink: /<slug>/` so Eleventy renders at the correct URL
+without the theme's eleventyComputed regex misfiring.
 
-#### Bug 2: Photo posts lose their image URLs (most damaging)
+**Verified:** `about.md` now → `pages/about.md`, frontmatter has
+`permalink: /about/` and `original_url: /about/`. Redirect dedup
+filter correctly drops the no-op `/about/` → `/about/`.
 
-**Symptom:** `ctait-juste-une.md` had:
-```yaml
-images:
-- https://pbs.twimg.com/media/FtWBIJSWwAA5_Eu.jpg
-photos:
-- https://pbs.twimg.com/media/FtWBIJSWwAA5_Eu.jpg
-photos_with_metadata:
-- url: ...; width: 944; height: 1200
-```
+#### Bug 2: Photo posts lose their image URLs — ✅ FIXED
 
-After conversion, the staged photo post has none of these fields. The
-post is correctly classified as photo but **the photos themselves are
-gone**. A post-migration site renders "photo posts with no photos" —
-defeats the purpose entirely.
+**Symptom:** `ctait-juste-une.md` had `images:` and `photos:` arrays
+in frontmatter; the staged output had neither. Photo posts went
+through with no photos.
 
-**Root cause:** `migration/lib/frontmatter.mjs:writeMarkdown()`
-emits a fixed allowlist (`date`, `layout`, `title`, `category`,
-response props, `original_url`). All other frontmatter fields are
-silently dropped.
+**Root cause:** `frontmatter.mjs:writeMarkdown()` emitted a fixed
+allowlist; non-listed frontmatter was silently dropped.
 
-**Fix shape:** preserve `photo:` / `photos:` / `images:` arrays when
-post type is `photo`. Decide format: keep all three keys, or normalize
-to one canonical (e.g., `photo:` per IndieWeb microformat). Also
-consider `photos_with_metadata:` for width/height — useful for
-responsive image rendering.
+**Fix:** added `photo` field to the canonical Post model; new
+`collectPhotos(fm)` helper in `process-file.mjs` deduplicates URLs
+from `photo:` / `photos:` / `images:` / `image:` / `photos_with_metadata[].url`
+inputs into a single `photo:` array (Indiekit/microformat convention);
+`writeMarkdown` emits `photo:` when populated.
 
-**Severity:** highest — silent data loss that makes migrated photo
-posts useless.
+**Verified:** `ctait-juste-une.md` output now has
+`photo: [https://pbs.twimg.com/media/FtWBIJSWwAA5_Eu.jpg]`.
 
-#### Bug 3: Cross-post syndication metadata silently dropped
+#### Bug 3: Cross-post syndication metadata dropped — ❌ WONTFIX (intentional)
 
-**Symptom:** every micro.blog status post has 1-5 syndication blocks
-in frontmatter:
-```yaml
-mastodon: { id, username, hostname }
-bluesky: { id, url, link, handle, hostname, did }
-nostr: { id, pubkey }
-threads: { id, url, username }
-twitter: { id, username }
-```
+**Original concern:** micro.blog frontmatter has `mastodon:`,
+`bluesky:`, `nostr:`, `threads:`, `twitter:` blocks with cross-post
+URLs/IDs. The adapter drops them.
 
-These contain real cross-post URLs/IDs that link the migrated post to
-where it was originally syndicated. Useful for IndieWeb attribution
-("this also appears at: ..."). All silently dropped on output.
-
-**Fix shape:** detect these blocks and gather the URLs into a single
-`syndication:` array (Indiekit's microformat convention):
-```yaml
-syndication:
-  - https://mstdn.social/@rmdes/113063980025691863
-  - https://bsky.app/profile/.../post/3l34jth3wf42d
-  - https://www.threads.net/@rimdesg/post/C_YvKBRSHJI
-```
-
-URL templates per platform are well-defined (mastodon:
-`https://{hostname}/@{username}/{id}`, bluesky: `link` field already
-absolute, threads: `url` field already absolute, twitter: deprecated —
-maybe skip).
-
-**Severity:** medium — not destructive (the original post still has
-the syndication data on its native platforms), but a cleaner
-migration would preserve the breadcrumb trail.
+**Decision (2026-05-08):** intentional. The user's own micro.blog
+migration manually stripped these because they're full of noisy
+Facebook webmentions and similar — preserving them adds clutter
+without value for the migrated site. The original posts on each
+syndication target retain their own data. **Adapter behavior is
+correct: drop these blocks silently.** No action needed.
 
 ### Real-world Hugo edge cases
 The synthetic fixture in our smoke test was tiny and didn't exercise:

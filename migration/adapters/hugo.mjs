@@ -44,7 +44,15 @@ export async function convert({ inputDir, overrides, source = "hugo" }) {
     if (base.startsWith("_index.")) continue; // Hugo section list page
 
     const section = sectionFor(rel);
-    const folderHint = SECTION_HINTS[section] ?? null;
+    let folderHint = SECTION_HINTS[section] ?? null;
+
+    // Files directly under content/ (e.g. about.md, bookmarks.md) are pages,
+    // not articles. micro.blog and Hugo both put navigation pages at this
+    // level. The default Hugo section table doesn't catch them because
+    // sectionFor() returns the filename (e.g. "about.md") which isn't in
+    // SECTION_HINTS — so the classifier was falling through to "has title →
+    // article" and dating them as if they were posts.
+    if (path.dirname(rel) === "content") folderHint = "page";
 
     // Page bundles: <slug>/index.md → slug from parent directory
     let relForSlug = rel;

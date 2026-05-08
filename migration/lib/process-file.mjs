@@ -69,6 +69,7 @@ export async function processFile({
     category,
     body,
     originalUrl,
+    photo: collectPhotos(fm),
     sourcePath: relPath,
     likeOf: fm["like-of"] || fm.like_of,
     repostOf: fm["repost-of"] || fm.repost_of,
@@ -104,6 +105,36 @@ function parseDate(value) {
   if (value instanceof Date) return value;
   const d = new Date(value);
   return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/**
+ * Gather photo URLs from common micro.blog/Hugo frontmatter shapes:
+ * - photo: ["url"]                     (Indiekit/microformat)
+ * - photos: ["url1", "url2"]           (micro.blog convention)
+ * - images: ["url1", "url2"]           (Hugo / micro.blog duplicate)
+ * - image: "url"                       (singular fallback)
+ * - photos_with_metadata: [{url, width, height}]  (micro.blog rich form)
+ *
+ * Returns a deduplicated array of URL strings. The output is emitted
+ * as `photo:` in the staged frontmatter — Indiekit's expected shape.
+ */
+function collectPhotos(fm) {
+  const urls = new Set();
+  const push = (v) => {
+    if (Array.isArray(v)) v.forEach(push);
+    else if (typeof v === "string" && v) urls.add(v);
+    else if (v && typeof v === "object" && v.url) urls.add(String(v.url));
+  };
+  push(fm.photo);
+  push(fm.photos);
+  push(fm.images);
+  push(fm.image);
+  if (Array.isArray(fm.photos_with_metadata)) {
+    for (const p of fm.photos_with_metadata) {
+      if (p && p.url) urls.add(String(p.url));
+    }
+  }
+  return [...urls];
 }
 
 function defaultCollectCategories(fm) {
