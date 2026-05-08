@@ -66,6 +66,10 @@ services:
     env_file: .env
     volumes:
       - ./docker/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # Migration redirects — populated by `make migrate-apply`. The placeholder
+      # at this path contains only comments so Caddy starts cleanly even if
+      # migration was never run.
+      - ./docker/caddy/migration-redirects:/etc/caddy/migration-redirects:ro
       - site:/data/site:ro
       - uploads:/data/uploads:ro
       - content:/data/content:ro
@@ -86,6 +90,24 @@ services:
     volumes:
       - indiekit_config:/data/config:ro
     restart: unless-stopped
+
+  # One-shot migrator. Profile-gated so `make up` doesn't start it. Bind-mounts
+  # the source tree at /migration so iterating on adapters doesn't require
+  # rebuilding the image. Mounts the live volumes and the Caddy config dir
+  # so `migrate-apply` can write content, uploads, and the redirects snippet.
+  migrator:
+    build:
+      context: .
+      dockerfile: docker/migrator/Dockerfile
+    profiles:
+      - migrate
+    volumes:
+      - ./migration:/migration
+      - ./docker/caddy:/migration-caddy
+      - content:/data/content
+      - uploads:/data/uploads
+    working_dir: /migrator
+    restart: "no"
 
 volumes:
   mongodb_data:

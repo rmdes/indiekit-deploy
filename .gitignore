@@ -23,3 +23,10 @@ vault-password
 *.swp
 *.swo
 *~
+
+# Migration tool — user content lives in input/, generated output in staged/.
+# Both are .gitignore'd inside migration/.gitignore; this is belt-and-braces.
+migration/input/*
+migration/staged/*
+!migration/input/.gitkeep
+!migration/staged/.gitkeep

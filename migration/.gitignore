@@ -1,0 +1,10 @@
+# User-supplied content and generated output are not committed
+input/*
+staged/*
+
+# But keep the directories around
+!input/.gitkeep
+!staged/.gitkeep
+
+# Node
+node_modules/

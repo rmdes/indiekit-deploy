@@ -1,0 +1,29 @@
+# _classify.yaml — Optional post-type override file
+#
+# Place this file at migration/input/_classify.yaml to override the
+# automatic post-type classifier for specific files.
+#
+# Patterns are glob-matched against the file path RELATIVE to migration/input/.
+# Supported: * (single segment), ** (any segments), ? (single char).
+#
+# Order: rules are evaluated top-to-bottom. The FIRST matching rule wins.
+# User overrides take precedence over all automatic classification.
+#
+# Valid types: article, note, photo, like, reply, repost, bookmark, page
+
+overrides:
+  # Example: a folder of standalone pages
+  - pattern: "_pages/**"
+    type: page
+
+  # Example: posts shorter than your usual essays go to notes
+  - pattern: "_posts/2019-*-microblog-*.md"
+    type: note
+
+  # Example: bookmark folder from a Hugo site
+  - pattern: "content/links/**"
+    type: bookmark
+
+  # Example: photo posts from a micro.blog export
+  - pattern: "content/uploads/photos/**"
+    type: photo

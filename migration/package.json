@@ -1,0 +1,22 @@
+{
+  "name": "indiekit-migrator",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Migrate content from Jekyll, Hugo, micro.blog and other static site generators into Indiekit",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "globby": "^14.0.2",
+    "gray-matter": "^4.0.3",
+    "js-yaml": "^4.1.0",
+    "picomatch": "^4.0.2"
+  },
+  "scripts": {
+    "detect": "node bin/detect.mjs",
+    "convert": "node bin/convert.mjs",
+    "preview": "node bin/preview.mjs",
+    "apply": "node bin/apply.mjs"
+  }
+}
