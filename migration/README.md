@@ -21,11 +21,16 @@ without dragging stale output forward.
 
 ## Supported sources
 
-| `FROM=` | Layout it expects | Notes |
-|---------|-------------------|-------|
-| `jekyll` | `_config.yml` + `_posts/YYYY-MM-DD-slug.md` | Honors `permalink:` if set, otherwise computes Jekyll's default URL |
-| `hugo` | `hugo.toml` (or `config.*`) + `content/**` | Handles page bundles (`slug/index.md`); skips `_index.md` section pages |
-| `microblog` | Hugo-shaped export from micro.blog | Thin wrapper over the Hugo adapter |
+| `FROM=` | Layout it expects | Deep-dive guide |
+|---------|-------------------|-----------------|
+| `jekyll` | `_config.yml` + `_posts/YYYY-MM-DD-slug.md` | (TBD) |
+| `hugo` | `hugo.toml` (or `config.*`) + `content/**` | [migration-from-hugo.md](../docs/migration-from-hugo.md) |
+| `microblog` | Hugo-shaped export from micro.blog | (TBD — uses Hugo adapter; same guide applies) |
+
+Each adapter has notes specific to its source SSG (Hugo's page
+bundles, Jekyll's permalink schema, etc.). For Hugo, see the
+linked guide for a step-by-step walkthrough, edge cases, and
+troubleshooting.
 
 If detection fails (custom layout, no SSG config), pass `FROM=hugo` —
 the Hugo adapter accepts any `content/**/*.md` tree.

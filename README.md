@@ -212,6 +212,31 @@ ansible-playbook -i inventory playbook.yml
 ansible-playbook -i inventory playbook.yml --tags update
 ```
 
+## Migrating from another static site generator
+
+Already running Hugo, Jekyll, or micro.blog? The bundled migration
+tool moves your existing posts, media, and old URLs into Indiekit
+without losing them.
+
+```bash
+cp -r ~/old-blog/* migration/input/
+make migrate-detect            # auto-detects the SSG layout
+make migrate-convert FROM=hugo # transform → migration/staged/
+make migrate-preview           # diff against live volumes
+make migrate-apply             # copy into content + uploads volumes
+docker compose restart caddy   # activate URL redirects
+```
+
+Migrated posts serve at canonical Indiekit URLs
+(`/articles/2024/03/15/slug/`); old URLs from your previous site
+301-redirect to the canonical ones; media files keep their original
+web paths.
+
+- **[migration/README.md](migration/README.md)** — overview, supported
+  sources, classification rules
+- **[docs/migration-from-hugo.md](docs/migration-from-hugo.md)** —
+  step-by-step Hugo migration with edge cases and troubleshooting
+
 ## Common Commands
 
 ```bash
@@ -227,6 +252,10 @@ make shell-eleventy  # Shell into Eleventy container
 make backup          # Backup all volumes to backups/
 make restore FILE=backups/indiekit-*.tar.gz  # Restore from backup
 make update-theme    # Pull latest Eleventy theme
+make migrate-detect  # Detect SSG in migration/input/
+make migrate-convert FROM=hugo  # Convert SSG → migration/staged/
+make migrate-preview # Diff staged tree vs live volumes
+make migrate-apply   # Copy staged → live volumes (FORCE=1 to overwrite)
 ```
 
 ## Eleventy Theme
