@@ -15,15 +15,19 @@ This repository provides production-ready deployment of Indiekit using Docker Co
 ```
 Internet
   |
-Caddy :443 (auto HTTPS via Let's Encrypt)
+Caddy :443 (auto HTTPS via Let's Encrypt; :443/UDP for HTTP/3)
   |
   ├─ Static site (Eleventy) → /data/site/current (read-only, symlink to latest release)
   ├─ Uploads → /data/uploads (read-only)
+  ├─ Content (media) → /data/content (read-only)
+  ├─ Migration redirects → ./docker/caddy/migration-redirects (bind, read-only)
   └─ API endpoints → Indiekit :8080 (reverse proxy)
        |
        ├─ MongoDB (data store)
        ├─ Eleventy (watches /data/content, atomic release swap to /data/site/releases/)
-       └─ Cron sidecar (syndication every 2m, webmentions every 5m)
+       ├─ Cron sidecar (syndication every 2m, webmentions every 5m)
+       ├─ Redis (Fedify KV store + plugin cache; mandatory for full profile)
+       └─ Migrator (one-shot, profile-gated; Jekyll/Hugo/micro.blog → Indiekit)
 ```
 
 ### Services
@@ -33,9 +37,10 @@ Caddy :443 (auto HTTPS via Let's Encrypt)
 | **mongodb** | Data store | `mongo:7` | 27017 (internal) | `mongodb_data:/data/db` |
 | **indiekit** | Micropub server, admin UI | Built from `docker/indiekit/Dockerfile` | 8080 (internal) | `content`, `uploads`, `indiekit_config` |
 | **eleventy** | Static site builder (watch mode) | Built from `docker/eleventy/Dockerfile` | — | `content` (read), `site`, `cache`, `uploads` (read) |
-| **caddy** | HTTPS reverse proxy | `caddy:2-alpine` | 80, 443 (public) | `site` (read), `uploads` (read), `content` (read), `caddy_data`, `caddy_config` |
-| **cron** | Background jobs | Built from `docker/cron/Dockerfile` | — | `indiekit_config` (read) |
-| **redis** (optional) | Cache | `redis:7-alpine` | 6379 (internal) | — |
+| **caddy** | HTTPS reverse proxy | `caddy:2-alpine` | 80, 443, 443/UDP (HTTP/3) | `site` (read), `uploads` (read), `content` (read), `caddy_data`, `caddy_config`, `./docker/caddy/migration-redirects` (bind, read) |
+| **cron** | Background jobs (syndication, webmentions) | Built from `docker/cron/Dockerfile` | — | `indiekit_config` (read) |
+| **redis** | Fedify KV store + plugin cache | `redis:7-alpine` | 6379 (internal) | — — *Profile-gated `redis` in core (optional). Mandatory for Full profile (AP plugin requires it).* |
+| **migrator** | One-shot static-site → Indiekit migration tool (Jekyll/Hugo/micro.blog) | Built from `docker/migrator/Dockerfile` | — | `./migration` (bind), `./docker/caddy` (bind), `content`, `uploads` — *Profile-gated `migrate`. Activated via `make migrate-*` commands.* |
 
 ### Data Flow
 
@@ -81,6 +86,18 @@ All data lives in named Docker volumes (persists across container restarts):
 - The `docker/indiekit/entrypoint.sh` copies the appropriate config to `/data/config/indiekit.config.js` on first run
 - After first run, the persistent volume copy is used (allows user editing in-place)
 - To reset config, delete `/data/config/indiekit.config.js` and restart
+
+### Patches Applied to Upstream Indiekit
+
+Three files in `docker/indiekit/patches/` are copied over upstream Indiekit files during the Docker build. **Note:** these patches are scoped to *this* repo and differ from the patches in `indiekit-cloudron` despite sharing filenames.
+
+| Patch | Target | Purpose |
+|-------|--------|---------|
+| `patches/routes.js` | `node_modules/@indiekit/indiekit/lib/routes.js` | **Two-tier rate limiting** — splits the single rate limiter into `sessionLimit` (50/15min, brute-force protection on auth routes) and `apiLimit` (1000/15min, public API endpoints). Removes rate limiting entirely from authenticated routes. Also adds **content-negotiation routes** for ActivityPub (so requests with `Accept: application/activity+json` reach Indiekit's AP handlers). |
+| `patches/error.js` | `node_modules/@indiekit/indiekit/lib/middleware/error.js` | Suppresses stack traces in production error responses (HTML and JSON). Prevents leaking internal file paths and dependency versions when `NODE_ENV=production`. |
+| `patches/indieauth.js` | `node_modules/@indiekit/indiekit/lib/indieauth.js` | Fixes overly restrictive redirect URI regex. Upstream `/^\/[\w&/=?]*$/` rejects hyphens, dots, and percent-encoded characters, breaking login when redirecting to URLs like `/auth/new-password` or `/files/upload-photos`. |
+
+When upstream Indiekit updates, diff the new files against our patches and re-apply the same principles.
 
 ### Docker Images
 
@@ -201,19 +218,25 @@ AUTHOR_NAME=Jane Doe                  # Your name
 
 ### Plugin Profiles
 
-**Core profile** (`make up`):
-- Post types: article, bookmark, like, note, photo, reply, repost, page
-- Endpoints: Micropub, Syndicate, JSON Feed, Webmention Sender, Webmention.io (if `WEBMENTION_IO_TOKEN` set)
-- Syndicators: Mastodon, Bluesky, LinkedIn, IndieNews (conditionally loaded)
+**Source of truth — do NOT inline plugin lists in this doc:**
 
-**Full profile** (`make up-full`):
-- Core + additional post types: audio, event, jam, rsvp, video
-- Core + additional endpoints: GitHub, Funkwhale, Last.fm, YouTube, RSS, Microsub, Webmentions Proxy, Podroll
+- `docker/indiekit/package.core.json` — exact list of plugins installed in the **core** image
+- `docker/indiekit/package.full.json` — exact list installed in the **full** image
+- `config/indiekit.config.js` — runtime config used by the core image
+- `config/indiekit.config.full.js` — runtime config used by the full image
+
+Reading these files is the only reliable way to know which plugins ship in each profile. This doc previously inlined partial lists that drifted out of sync (e.g., listed a "Webmentions Proxy" plugin that was never installed).
+
+**Profile shape (high level):**
+
+- **Core** (`make up`): Minimal IndieWeb blog — base post types (article, bookmark, like, note, photo, reply, repost, page), Micropub, Syndicate, JSON Feed, Webmention Sender, Webmention.io, Conversations, the four syndicators (Mastodon, Bluesky, LinkedIn, IndieNews), and the LinkedIn OAuth endpoint. Conditional loading: syndicators only register when their respective env vars are set.
+- **Full** (`make up-full`): Core *plus* extra post types (audio, event, jam, rsvp, video) and the rich plugin set: GitHub, Funkwhale, Last.fm, YouTube, RSS, Microsub, Podroll, Blogroll, Homepage builder, CV, Comments, Read-later, and **ActivityPub federation** (mandates Redis).
 
 **CRITICAL: Profile selection**
-- Set via `PROFILE` build arg in Dockerfile (`core` or `full`)
-- `docker-compose.full.yml` overrides build arg to `PROFILE=full`
-- `docker/indiekit/entrypoint.sh` reads `INDIEKIT_PROFILE` env var to select config file
+- Set via `PROFILE` build arg in `docker/indiekit/Dockerfile` (`core` or `full`)
+- `docker-compose.full.yml` overrides build arg to `PROFILE=full` and selects the `rmdes/indiekit-deploy-server-full` image
+- `docker/indiekit/entrypoint.sh` reads `INDIEKIT_PROFILE` env var to select the right config file at runtime
+- **Compose 2.39+ profile gate quirk:** `profiles: []` in an override file no longer clears a parent's profile gate. The `Makefile` activates the redis profile explicitly with `--profile redis` for `make up-full`. Removing this flag reproduces the error: *"service indiekit depends on undefined service redis"*. See `Makefile` `COMPOSE_FULL` definition.
 
 ## Deployment Workflow
 
@@ -335,23 +358,49 @@ make restore FILE=backups/indiekit-*.tar.gz
 
 ## Commands
 
+The Makefile is the source of truth — run `make help` or read the `.PHONY` line at the top to discover targets. Highlights:
+
 ```bash
+# Lifecycle
+make init            # Initialize the eleventy-site submodule
 make up              # Start services (core profile)
-make up-full         # Start services (full profile)
+make up-full         # Start services (full profile, activates redis profile)
 make down            # Stop all services
 make logs            # Follow all logs
 make restart         # Restart all services
 make status          # Show service status
-make build           # Rebuild images (no cache)
+
+# Build
+make build           # Rebuild images (no cache, core profile)
 make build-full      # Rebuild images (full profile)
+make update-theme    # Pull latest theme (requires make build after)
+
+# Shells
 make shell-indiekit  # Shell into Indiekit container
 make shell-eleventy  # Shell into Eleventy container
 make shell-cron      # Shell into Cron container
 make shell-caddy     # Shell into Caddy container
+
+# Backup
 make backup          # Backup all volumes to backups/
 make restore FILE=backups/indiekit-*.tar.gz  # Restore from backup
-make init            # Initialize submodule
-make update-theme    # Pull latest theme (requires make build after)
+
+# Migration (one-shot, profile-gated to `migrate`)
+make migrate-build   # Build the migrator image
+make migrate-detect  # Detect SSG layout in migration/input/
+make migrate-convert FROM=hugo  # Convert SSG → migration/staged/
+make migrate-preview # Diff staged tree vs live volumes
+make migrate-apply   # Copy staged → live volumes (FORCE=1 to overwrite)
+make migrate-shell   # Drop into the migrator container
+
+# Release / CI (used by maintainer)
+make build-release   # Build a multi-arch release image
+make tag             # Tag the current commit with a version
+make push            # Push images to registries
+make release         # Full release workflow
+make version         # Show current version
+make ci              # Trigger CI build
+make ci-status       # Show CI run status
 ```
 
 ## Security Notes
@@ -473,6 +522,42 @@ The default `@11ty/eleventy/html-transformer` transform is overridden with a pre
 **What makes a build "cold":** The OG manifest (`.cache/og/manifest.json`), unfurl cache (`.cache/unfurl/`), and eleventy-fetch cache (`.cache/eleventy-fetch/`) are empty. This happens on first deploy or if the `cache` Docker volume is wiped.
 
 **What makes a build "warm":** Caches are populated from a previous build in the persistent `cache` Docker volume. OG generation only processes new/changed posts (manifest-based diffing). Unfurl URLs and API data are served from disk cache. The dominant cost is template rendering + Pagefind indexing (~2-3 min).
+
+## Migration System
+
+The repo ships a one-shot migration toolkit that converts other static-site exports (Jekyll, Hugo, micro.blog) into Indiekit's content layout, plus a Caddy-snippet of 301 redirects so the migrated site keeps its old URLs alive.
+
+### Architecture
+
+- **Source code:** `migration/` (ESM Node, no host-side runtime — runs only in the migrator container)
+  - `bin/{detect,convert,preview,apply}.mjs` — CLI entry points
+  - `adapters/{jekyll,hugo,microblog}.mjs` — per-source-format converters
+  - `lib/{post,frontmatter,classify,media,redirects,detect,...}.mjs` — shared helpers
+- **Image:** `docker/migrator/Dockerfile` (built into `rmdes/indiekit-deploy-migrator:latest`)
+- **Service:** `migrator` in `docker-compose.yml` (profile-gated to `migrate`)
+- **Bind mounts:**
+  - `./migration:/migration` — live source iteration without rebuilding the image
+  - `./docker/caddy:/migration-caddy` — `migrate-apply` writes the redirects snippet here
+  - `content` and `uploads` named volumes — apply step writes content + media into them
+- **Caddy integration:** `docker/caddy/migration-redirects` is bind-mounted by the Caddy service. It starts as a comment-only no-op so Caddy boots cleanly even if migration was never run.
+
+### Workflow
+
+```
+1. Drop the old site export → migration/input/
+2. make migrate-detect              # what's in there?
+3. make migrate-convert FROM=hugo   # transform → migration/staged/
+4. (optional) eyeball migration/staged/
+5. make migrate-preview             # diff staged tree vs live volumes
+6. make migrate-apply               # write into content + uploads volumes + caddy redirects
+7. docker compose restart caddy     # activate URL redirects
+```
+
+Each step is independent and idempotent. Re-running `migrate-convert` regenerates `staged/` from scratch — safe to iterate on `_classify.yaml` overrides.
+
+### Status
+
+See `TODO.md` for adapter status. As of May 2026: Hugo verified end-to-end on localhost; micro.blog adapter shipped with reference output at `indiekit-cloudron/migrated-content/` (canonical example of what micro.blog → Indiekit conversion should look like); Jekyll adapter shipped but **untested with real Jekyll content**; Ghost / WXR / Eleventy-to-Eleventy adapters not started.
 
 ## Development Mode
 

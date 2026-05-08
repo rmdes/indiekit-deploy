@@ -10,6 +10,7 @@ Docker Compose + Ansible deployment for [Indiekit](https://getindiekit.com), an 
                      ┌──────┴──────┐
                      │  Caddy :443 │  Automatic HTTPS (Let's Encrypt)
                      │  :80 → :443 │  Static site + reverse proxy
+                     │  :443/UDP   │  HTTP/3
                      └──┬───────┬──┘
                         │       │
             ┌───────────┘       └──────────┐
@@ -17,19 +18,28 @@ Docker Compose + Ansible deployment for [Indiekit](https://getindiekit.com), an 
    ┌────────────────┐            ┌─────────────────┐
    │  Indiekit:8080 │            │  Eleventy        │
    │  Micropub      │──content──▶│  Watch + rebuild │
-   │  Auth, Admin   │  volume    │  Static HTML     │
-   └───────┬────────┘            └─────────────────┘
-           │                              │
-   ┌───────┴────────┐            site volume → Caddy serves
-   │  MongoDB       │
-   │  Data store    │     ┌─────────────────┐
-   └────────────────┘     │  Cron sidecar   │
-                          │  Syndication 2m  │
-                          │  Webmentions 5m  │
-                          └─────────────────┘
+   │  Auth, Admin   │  volume    │  Atomic releases │
+   └───┬─────────┬──┘            └─────────────────┘
+       │         │                        │
+       ▼         ▼                  site volume → Caddy serves
+   ┌──────┐  ┌──────┐
+   │Mongo │  │Redis │     ┌─────────────────┐
+   │ Data │  │Fedify│     │  Cron sidecar   │
+   │      │  │KV+   │     │  Syndication 2m  │
+   │      │  │cache │     │  Webmentions 5m  │
+   └──────┘  └──────┘     └─────────────────┘
+                  ↑
+                  └─ mandatory for full profile
+                     (ActivityPub federation)
+
+   ┌────────────────────────────────────────┐
+   │  Migrator (one-shot, profile=migrate)  │
+   │  Jekyll/Hugo/micro.blog → Indiekit     │
+   │  Activated via `make migrate-*`        │
+   └────────────────────────────────────────┘
 ```
 
-**Services:** MongoDB, Indiekit (Node.js), Eleventy (static site builder), Caddy (HTTPS reverse proxy), Cron (background jobs). Optional Redis cache.
+**Services:** MongoDB, Indiekit (Node.js), Eleventy (static site builder), Caddy (HTTPS reverse proxy), Cron (background jobs), Redis (cache; mandatory for full profile). Plus a one-shot Migrator service (profile-gated) for converting external static sites.
 
 > **New to Indiekit?** Read the [full deployment guide](docs/deployment-guide.md) — a step-by-step walkthrough covering server setup, DNS, configuration, first-run password creation, syndication, webmentions, and the full plugin set.
 
@@ -132,11 +142,12 @@ Minimal plugin set for a functional IndieWeb blog:
 
 | Category | Plugins |
 |----------|---------|
-| Post types | article, bookmark, like, note, photo, reply, repost |
+| Post types | article, bookmark, like, note, photo, reply, repost, **page** (slash pages: `/about`, `/now`, `/uses`) |
 | Preset | `@rmdes/indiekit-preset-eleventy` (permalink fix) |
 | Store | `@indiekit/store-file-system` |
-| Endpoints | Micropub, Syndicate, JSON Feed, Webmention.io, Webmention Sender, Conversations |
+| Endpoints | Micropub, Syndicate, JSON Feed, Webmention.io, Webmention Sender, Conversations, LinkedIn (OAuth), Files, Share |
 | Syndicators | Mastodon, Bluesky, LinkedIn, IndieNews |
+| Infra | `@rmdes/indiekit-startup-gate` (defers plugin background tasks until first build completes) |
 
 ```bash
 make up
@@ -144,11 +155,13 @@ make up
 
 ### Full
 
-All `@rmdes` plugins — adds GitHub activity, Funkwhale, Last.fm, YouTube, RSS reader, Microsub, Webmentions proxy, Podroll, Comments, ActivityPub federation, and extra post types (audio, event, jam, rsvp, video, page).
+Core *plus* the rich `@rmdes/*` plugin set: GitHub activity, Funkwhale, Last.fm, YouTube, RSS reader, Microsub social reader, Podroll, Blogroll, Homepage builder, CV, Comments, Read-later, **ActivityPub federation** (Fedify), and extra post types (audio, event, jam, rsvp, video).
 
 ```bash
 make up-full
 ```
+
+The full profile **requires Redis** (mandatory for the ActivityPub plugin's Fedify KV store) and is started with `--profile redis` automatically by the Makefile.
 
 ## Configuration
 

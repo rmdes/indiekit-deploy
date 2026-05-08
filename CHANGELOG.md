@@ -2,6 +2,64 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-05-08 — Migration system + plugin updates
+
+Adds a one-shot static-site migration toolkit (Jekyll/Hugo/micro.blog → Indiekit) and brings every plugin to current versions. Documentation reorganized so plugin lists point to source-of-truth files instead of inline copies that drift.
+
+### Migration System (NEW)
+
+A Docker-only migration tool — no host-side Node or Python required — that converts existing static sites into Indiekit content layout while preserving old URLs via Caddy 301 redirects.
+
+- New `migrator` service in `docker-compose.yml` (profile-gated to `migrate`)
+- New `docker/migrator/Dockerfile` and image: `rmdes/indiekit-deploy-migrator`
+- New `migration/` source tree with adapters for Hugo, Jekyll, and micro.blog (`migration/adapters/{hugo,jekyll,microblog}.mjs`), CLI bins (`migration/bin/{detect,convert,preview,apply}.mjs`), shared helpers (`migration/lib/`)
+- New Caddy bind mount `./docker/caddy/migration-redirects` populated by `make migrate-apply`
+- New Makefile targets: `make migrate-{build,detect,convert,preview,apply,shell}`
+- See `migration/README.md` and `docs/migration-from-hugo.md`
+
+**Status:** Hugo verified end-to-end on localhost; micro.blog migration path proven in production at `indiekit-cloudron/migrated-content/`; Jekyll adapter shipped but untested with real Jekyll content; Ghost / WordPress (WXR) / Eleventy-to-Eleventy adapters not started.
+
+### Plugin Updates
+
+Versions current as of this entry — `docker/indiekit/package.{core,full}.json` is authoritative going forward.
+
+- **`@rmdes/indiekit-endpoint-activitypub`** 2.0.9 → **3.13.6** — Major release including Fedify 2.2.0, security patches (hono auth bypass, lodash code injection, path-to-regexp ReDoS, postcss prototype pollution), tombstone support for deleted actors, FEP-044f quote post vocabulary, Pixelfed attachment fix, Mastodon Client API
+- **`@rmdes/indiekit-endpoint-microsub`** 1.0.33 → **1.0.61** — 28 patch versions
+- **`@rmdes/indiekit-endpoint-conversations`** 2.1.2 → **2.4.3**
+- **`@rmdes/indiekit-syndicator-bluesky`** 1.0.14 → **1.0.21**
+- **`@rmdes/indiekit-endpoint-syndicate`** beta.34 → **beta.38**
+- **`@rmdes/indiekit-endpoint-webmention-io`** 1.0.7 → **1.0.8**
+- **`@rmdes/indiekit-endpoint-homepage`** 1.0.16 → **1.0.24**
+- **`@rmdes/indiekit-endpoint-cv`** 1.0.19 → **1.0.26**
+
+### New Plugins (Both Profiles)
+
+- **`@rmdes/indiekit-startup-gate@1.0.0`** — Defers plugin background tasks until after the first Eleventy build completes, preventing memory contention during cold starts
+
+### New Plugins (Core)
+
+- **`@rmdes/indiekit-post-type-page@1.0.4`** — Slash pages (`/about`, `/now`, `/uses`)
+- **`@rmdes/indiekit-endpoint-files@1.0.3`** — Multi-file upload support
+- **`@rmdes/indiekit-endpoint-share@1.0.4`** — Share endpoint with type selection
+- **`@rmdes/indiekit-endpoint-linkedin@1.0.5`** — LinkedIn OAuth endpoint
+- **`@rmdes/indiekit-syndicator-linkedin@1.0.2`** — LinkedIn syndication
+
+### New Plugins (Full)
+
+- **`@rmdes/indiekit-endpoint-comments@1.0.16`** — Visitor comments via IndieAuth/RelMeAuth (replaces 1.0.0 from previous release)
+- **`@rmdes/indiekit-endpoint-readlater@1.0.6`** — Save URLs for later consumption
+- **`@rmdes/indiekit-endpoint-blogroll@1.0.24`** — Blog aggregation from OPML/Microsub
+- **`@rmdes/indiekit-endpoint-podroll@1.0.14`** — Podcast aggregation
+
+### Documentation
+
+- Fact-checked `README.md` and `CLAUDE.md` against repo reality
+- Replaced inline plugin lists with pointers to `docker/indiekit/package.{core,full}.json` (drift-resistant)
+- Added dedicated **patches table** to `CLAUDE.md` with per-patch purpose (routes.js, error.js, indieauth.js)
+- Added **migrator service** to architecture diagrams and Services table
+- Documented the Compose 2.39+ profile gate quirk (`--profile redis` flag requirement)
+- Removed lingering "Webmentions Proxy" plugin reference (deprecated, never installed in this repo)
+
 ## 2026-02-23 — Feature Parity with Cloudron Deployment
 
 Brought the Docker Compose deployment up to feature parity with the Cloudron deployment (`indiekit-cloudron`), covering URL handling, webmention/conversation APIs, ActivityPub federation, and plugin versions.
