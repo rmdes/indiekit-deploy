@@ -25,7 +25,7 @@
     "@indiekit/post-type-repost": "1.0.0-beta.25",
     "@rmdes/indiekit-post-type-page": "1.0.4",
     "@rmdes/indiekit-preset-eleventy": "1.0.0-beta.38",
-    "@rmdes/indiekit-endpoint-micropub": "1.0.0-beta.30",
+    "@rmdes/indiekit-endpoint-micropub": "1.0.0-beta.31",
     "@rmdes/indiekit-endpoint-syndicate": "1.0.0-beta.38",
     "@rmdes/indiekit-endpoint-files": "1.0.3",
     "@rmdes/indiekit-syndicator-mastodon": "1.0.9",
@@ -33,9 +33,9 @@
     "@rmdes/indiekit-syndicator-linkedin": "1.0.2",
     "@rmdes/indiekit-endpoint-linkedin": "1.0.5",
     "@rmdes/indiekit-syndicator-indienews": "1.0.1",
-    "@rmdes/indiekit-endpoint-webmention-sender": "1.0.8",
+    "@rmdes/indiekit-endpoint-webmention-sender": "1.0.9",
     "@rmdes/indiekit-endpoint-webmention-io": "1.0.8",
-    "@rmdes/indiekit-endpoint-conversations": "2.4.2",
+    "@rmdes/indiekit-endpoint-conversations": "2.4.3",
     "@rmdes/indiekit-startup-gate": "1.0.0"
   }
 }
