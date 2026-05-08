@@ -96,6 +96,7 @@ services:
   # rebuilding the image. Mounts the live volumes and the Caddy config dir
   # so `migrate-apply` can write content, uploads, and the redirects snippet.
   migrator:
+    image: rmdes/indiekit-deploy-migrator:latest
     build:
       context: .
       dockerfile: docker/migrator/Dockerfile

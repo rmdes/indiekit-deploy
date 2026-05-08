@@ -117,6 +117,7 @@ tag:
 	docker tag $(REGISTRY)/indiekit-deploy-server:latest $(REGISTRY)/indiekit-deploy-server:$(VERSION)
 	docker tag $(REGISTRY)/indiekit-deploy-site:latest $(REGISTRY)/indiekit-deploy-site:$(VERSION)
 	docker tag $(REGISTRY)/indiekit-deploy-cron:latest $(REGISTRY)/indiekit-deploy-cron:$(VERSION)
+	docker tag $(REGISTRY)/indiekit-deploy-migrator:latest $(REGISTRY)/indiekit-deploy-migrator:$(VERSION)
 
 # Push all images to Docker Hub
 push: tag
@@ -126,6 +127,8 @@ push: tag
 	docker push $(REGISTRY)/indiekit-deploy-site:$(VERSION)
 	docker push $(REGISTRY)/indiekit-deploy-cron:latest
 	docker push $(REGISTRY)/indiekit-deploy-cron:$(VERSION)
+	docker push $(REGISTRY)/indiekit-deploy-migrator:latest
+	docker push $(REGISTRY)/indiekit-deploy-migrator:$(VERSION)
 
 # Full release: build + tag + push
 release: build-release push

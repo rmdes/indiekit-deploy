@@ -75,6 +75,7 @@ Pre-built images are automatically built on every commit and published to both D
 | [`rmdes/indiekit-deploy-server-full`](https://hub.docker.com/r/rmdes/indiekit-deploy-server-full) | Indiekit server — full plugin set |
 | [`rmdes/indiekit-deploy-site`](https://hub.docker.com/r/rmdes/indiekit-deploy-site) | Eleventy static site builder |
 | [`rmdes/indiekit-deploy-cron`](https://hub.docker.com/r/rmdes/indiekit-deploy-cron) | Cron sidecar (syndication + webmentions) |
+| [`rmdes/indiekit-deploy-migrator`](https://hub.docker.com/r/rmdes/indiekit-deploy-migrator) | Migration tool (Jekyll/Hugo/micro.blog → Indiekit) |
 
 GHCR alternatives are available at `ghcr.io/rmdes/indiekit-deploy-*`.
 

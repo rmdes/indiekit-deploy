@@ -37,6 +37,9 @@ jobs:
           - image: indiekit-deploy-cron
             dockerfile: docker/cron/Dockerfile
             build_args: ""
+          - image: indiekit-deploy-migrator
+            dockerfile: docker/migrator/Dockerfile
+            build_args: ""
 
     steps:
       - name: Checkout
