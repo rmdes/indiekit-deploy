@@ -8,7 +8,7 @@ Tracks open work on the migration tool and related infrastructure.
 |------|--------|
 | Hugo adapter | ✅ shipped, verified end-to-end on localhost |
 | Jekyll adapter | ⚠️ shipped, **untested with real Jekyll content** |
-| micro.blog adapter | ✅ migration path proven (rmendes.net runs on a real micro.blog → Indiekit migration; reference output at `indiekit-cloudron/migrated-content/`); ⚠️ new generic adapter unverified — needs diff against reference |
+| micro.blog adapter | ✅ migration path proven (rmendes.net runs on a real micro.blog → Indiekit migration; reference output at `indiekit-cloudron/migrated-content/`); ⚠️ new generic adapter partially verified against `~/code/Blog-Archives/blog.rmendes.net-2026/` — classification + URL preservation work, but **3 adapter bugs found** (see "micro.blog adapter bugs" below) |
 | Ghost adapter | ❌ not started |
 | WordPress (WXR) adapter | ❌ not started |
 | Eleventy-to-Eleventy adapter | ❌ not started |
@@ -61,6 +61,98 @@ produces equivalent output when fed a fresh micro.blog Hugo export.
 - [ ] Either: write a thin `docs/migration-from-microblog.md` that
       mostly delegates to the Hugo guide, OR fold a "micro.blog
       notes" section into the Hugo guide
+
+### micro.blog adapter bugs (found 2026-05-08)
+
+Test setup: 4 representative files from
+`~/code/Blog-Archives/blog.rmendes.net-2026/` (a real micro.blog Hugo
+export) run through `make migrate-convert`. What worked: auto-detect
+picked `microblog`, status posts classified as note via title
+fallback, titled posts as article, photo posts via `images:`
+frontmatter signal, redirects pulled real `url:` from frontmatter.
+What broke:
+
+#### Bug 1: Top-level pages misclassify as articles
+
+**Symptom:** `content/about.md` (root-level file with `url: /about/`,
+`menu: main`, `weight: 2`) lands in `articles/` and the redirect maps
+`/about/` → `/articles/2024/12/08/about/`. Should be a page (no date
+in URL, no synthetic year/month/day prefix).
+
+**Root cause:** `migration/adapters/hugo.mjs:sectionFor()` extracts
+`parts[1]` as the section. For `content/about.md`, `parts[1]` is
+`about.md` — not in `SECTION_HINTS`. Falls through the classifier to
+"has title → article".
+
+**Fix shape:** in `hugo.mjs`, detect "file directly under content/"
+(parts.length === 2) and treat as page, OR check for page-typical
+frontmatter (`menu:`, `weight:`, `navigation:`, single-segment `url:
+/<slug>/`). Honor that as a page hint before classifier rule 6.
+
+#### Bug 2: Photo posts lose their image URLs (most damaging)
+
+**Symptom:** `ctait-juste-une.md` had:
+```yaml
+images:
+- https://pbs.twimg.com/media/FtWBIJSWwAA5_Eu.jpg
+photos:
+- https://pbs.twimg.com/media/FtWBIJSWwAA5_Eu.jpg
+photos_with_metadata:
+- url: ...; width: 944; height: 1200
+```
+
+After conversion, the staged photo post has none of these fields. The
+post is correctly classified as photo but **the photos themselves are
+gone**. A post-migration site renders "photo posts with no photos" —
+defeats the purpose entirely.
+
+**Root cause:** `migration/lib/frontmatter.mjs:writeMarkdown()`
+emits a fixed allowlist (`date`, `layout`, `title`, `category`,
+response props, `original_url`). All other frontmatter fields are
+silently dropped.
+
+**Fix shape:** preserve `photo:` / `photos:` / `images:` arrays when
+post type is `photo`. Decide format: keep all three keys, or normalize
+to one canonical (e.g., `photo:` per IndieWeb microformat). Also
+consider `photos_with_metadata:` for width/height — useful for
+responsive image rendering.
+
+**Severity:** highest — silent data loss that makes migrated photo
+posts useless.
+
+#### Bug 3: Cross-post syndication metadata silently dropped
+
+**Symptom:** every micro.blog status post has 1-5 syndication blocks
+in frontmatter:
+```yaml
+mastodon: { id, username, hostname }
+bluesky: { id, url, link, handle, hostname, did }
+nostr: { id, pubkey }
+threads: { id, url, username }
+twitter: { id, username }
+```
+
+These contain real cross-post URLs/IDs that link the migrated post to
+where it was originally syndicated. Useful for IndieWeb attribution
+("this also appears at: ..."). All silently dropped on output.
+
+**Fix shape:** detect these blocks and gather the URLs into a single
+`syndication:` array (Indiekit's microformat convention):
+```yaml
+syndication:
+  - https://mstdn.social/@rmdes/113063980025691863
+  - https://bsky.app/profile/.../post/3l34jth3wf42d
+  - https://www.threads.net/@rimdesg/post/C_YvKBRSHJI
+```
+
+URL templates per platform are well-defined (mastodon:
+`https://{hostname}/@{username}/{id}`, bluesky: `link` field already
+absolute, threads: `url` field already absolute, twitter: deprecated —
+maybe skip).
+
+**Severity:** medium — not destructive (the original post still has
+the syndication data on its native platforms), but a cleaner
+migration would preserve the breadcrumb trail.
 
 ### Real-world Hugo edge cases
 The synthetic fixture in our smoke test was tiny and didn't exercise:
