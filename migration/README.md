@@ -21,16 +21,22 @@ without dragging stale output forward.
 
 ## Supported sources
 
-| `FROM=` | Layout it expects | Deep-dive guide |
-|---------|-------------------|-----------------|
-| `jekyll` | `_config.yml` + `_posts/YYYY-MM-DD-slug.md` | (TBD) |
-| `hugo` | `hugo.toml` (or `config.*`) + `content/**` | [migration-from-hugo.md](../docs/migration-from-hugo.md) |
-| `microblog` | Hugo-shaped export from micro.blog | (TBD — uses Hugo adapter; same guide applies) |
+| `FROM=` | Layout it expects | Migration path | New adapter |
+|---------|-------------------|----------------|-------------|
+| `jekyll` | `_config.yml` + `_posts/YYYY-MM-DD-slug.md` | unverified | unverified |
+| `hugo` | `hugo.toml` (or `config.*`) + `content/**` | unverified | ✅ synthetic Hugo fixture passes end-to-end on localhost |
+| `microblog` | Hugo-shaped export from micro.blog | ✅ proven in production — [rmendes.net](https://rmendes.net) was migrated from micro.blog. Reference output: `~/code/indiekit-dev/indiekit-cloudron/migrated-content/` | ⚠️ unverified — needs diff against the reference output |
 
-Each adapter has notes specific to its source SSG (Hugo's page
-bundles, Jekyll's permalink schema, etc.). For Hugo, see the
-linked guide for a step-by-step walkthrough, edge cases, and
-troubleshooting.
+"Migration path" = whether anyone has actually moved real content from
+this source into Indiekit. "New adapter" = whether the adapter in this
+repo produces equivalent output. The two are distinct: micro.blog
+migration is a solved problem (real content runs on rmendes.net), but
+the *new* generic adapter has not been compared against that reference.
+
+Deep-dive guides:
+- [Migrating from Hugo to Indiekit](../docs/migration-from-hugo.md) —
+  full walkthrough; the same guide applies to micro.blog since
+  micro.blog exports as Hugo
 
 If detection fails (custom layout, no SSG config), pass `FROM=hugo` —
 the Hugo adapter accepts any `content/**/*.md` tree.

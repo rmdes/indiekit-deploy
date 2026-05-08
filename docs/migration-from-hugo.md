@@ -11,6 +11,20 @@ This guide assumes you already have a working indiekit-deploy stack
 localhost first, that's fine too — the migration tool runs identically
 in both environments.
 
+### Coming from micro.blog?
+
+You're in the right place. micro.blog exports Hugo-shaped trees
+(`hugo.toml` + `content/` + `uploads/YYYY/`), so this Hugo guide
+applies as-is. Pass `FROM=microblog` (or `FROM=hugo` — both work) and
+follow the steps below.
+
+[rmendes.net](https://rmendes.net) is a public example of a successful
+micro.blog → Indiekit migration. The migrated content shape lives at
+`~/code/indiekit-dev/indiekit-cloudron/migrated-content/` in this
+workspace and has been running in production since Feb 2026. If you
+want to see what well-formed Indiekit-format notes, articles, and
+likes look like after a micro.blog migration, that's the reference.
+
 ## Table of contents
 
 1. [What gets migrated (and what doesn't)](#1-what-gets-migrated-and-what-doesnt)

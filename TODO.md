@@ -8,7 +8,7 @@ Tracks open work on the migration tool and related infrastructure.
 |------|--------|
 | Hugo adapter | ✅ shipped, verified end-to-end on localhost |
 | Jekyll adapter | ⚠️ shipped, **untested with real Jekyll content** |
-| micro.blog adapter | ⚠️ shipped (thin wrapper over Hugo), **untested** |
+| micro.blog adapter | ✅ migration path proven (rmendes.net runs on a real micro.blog → Indiekit migration; reference output at `indiekit-cloudron/migrated-content/`); ⚠️ new generic adapter unverified — needs diff against reference |
 | Ghost adapter | ❌ not started |
 | WordPress (WXR) adapter | ❌ not started |
 | Eleventy-to-Eleventy adapter | ❌ not started |
@@ -37,9 +37,25 @@ Jekyll deserves the same.
       established in `docs/migration-from-hugo.md`
 
 ### micro.blog verification
-- [ ] Run a real micro.blog Hugo export end-to-end
-- [ ] Confirm the Hugo-adapter wrapper handles the export shape
-      (Hugo `content/` + `uploads/YYYY/...` media)
+
+The migration path is **proven in production**: rmendes.net was migrated
+from micro.blog into Indiekit format, and the resulting content lives at
+`indiekit-cloudron/migrated-content/` (notes/, articles/, likes/). That
+directory is the canonical reference for what micro.blog → Indiekit
+output should look like.
+
+What's unverified is whether the **new generic adapter** in this repo
+produces equivalent output when fed a fresh micro.blog Hugo export.
+
+- [ ] Run a fresh micro.blog Hugo export through the new adapter
+- [ ] Diff `migration/staged/content/` against
+      `~/code/indiekit-dev/indiekit-cloudron/migrated-content/`
+- [ ] Where they diverge, decide which is canonical:
+  - Cosmetic differences (whitespace, frontmatter ordering) → tolerate
+  - Different post-type classification → adapter bug, fix
+  - Missing media references → adapter bug, fix
+  - Improvements in the new adapter → consider re-migrating the live
+    site (separately, with backup)
 - [ ] Confirm the `_classify.yaml` override pattern works for
       micro.blog's "all posts in one folder" layout
 - [ ] Either: write a thin `docs/migration-from-microblog.md` that
