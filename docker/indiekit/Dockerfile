@@ -1,26 +1,24 @@
 FROM node:22-slim
 
-# PROFILE controls which plugin set to install: "core" (default) or "full"
-ARG PROFILE=core
-
 WORKDIR /app
 
-# Copy the appropriate package.json based on profile
-COPY docker/indiekit/package.${PROFILE}.json /app/package.json
+# Composed plugin set (base package.json overrides + registry-selected plugins),
+# generated on the host by scripts/compose-site.mjs → .compiled/. Single set —
+# the core/full PROFILE split is retired. Build context is the repo root (see
+# docker-compose.yml build.context: .), so .compiled/ is in scope.
+COPY .compiled/package.json /app/package.json
 
 # Install plugins
 RUN npm install --legacy-peer-deps
 
-# Copy config files (core and full — entrypoint selects the right one)
-COPY config/indiekit.config.js /app/config/indiekit.config.js
-COPY config/indiekit.config.full.js /app/config/indiekit.config.full.js
+# Composed Indiekit config (plugins array filled from the registry). The
+# entrypoint installs this to /data/config on EVERY boot — the config is a build
+# artifact (composed from plugins.yaml + the template), not hand-edited. See entrypoint.sh.
+COPY .compiled/indiekit.config.js /app/config/indiekit.config.js
 
 # Copy entrypoint
 COPY docker/indiekit/entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
-
-# Store the profile for the entrypoint to use
-ENV INDIEKIT_PROFILE=${PROFILE}
 
 # Patch routes.js: two-tier rate limiting + content negotiation
 # Splits rate limiting into sessionLimit (50/15min for brute force protection)

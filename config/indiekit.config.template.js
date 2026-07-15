@@ -1,52 +1,18 @@
 /**
- * Indiekit configuration — Core profile
+ * Indiekit configuration — TEMPLATE (registry-driven)
  *
- * Minimal plugin set for a functional IndieWeb blog with Micropub,
- * file storage, syndication, and JSON feed.
+ * The plugins array below is filled by scripts/compose-site.mjs from
+ * config/plugins.yaml + the plugin-registry. Do NOT hand-edit the plugins array
+ * here — edit config/plugins.yaml and recompose. The compiled result lands at
+ * .compiled/indiekit.config.js (consumed by the Docker build).
  *
- * Syndicators are only loaded when their required env vars are set.
- * Environment variables are set in .env (see .env.example for docs).
+ * RATIONALE — why the plugins array is static (no `if (process.env.X) push`):
+ * In the registry model every SELECTED plugin is always loaded. The per-plugin
+ * `checked: !!process.env.X` config below already makes a syndicator
+ * inactive-but-present when its env vars are unset (same as indiekit-cloudron),
+ * so conditional loading is no longer needed. Non-plugin config stays env-driven
+ * exactly as before — the blocks below are harmless when a plugin is unconfigured.
  */
-
-// Build plugins array dynamically — syndicators only load when configured
-const plugins = [
-  // Post types (MUST come before preset)
-  "@indiekit/post-type-article",
-  "@indiekit/post-type-bookmark",
-  "@indiekit/post-type-like",
-  "@indiekit/post-type-note",
-  "@indiekit/post-type-photo",
-  "@indiekit/post-type-reply",
-  "@indiekit/post-type-repost",
-  "@rmdes/indiekit-post-type-page",
-  // Preset and store (preset must come after post types)
-  "@rmdes/indiekit-preset-eleventy",
-  "@indiekit/store-file-system",
-  // Endpoints (always loaded)
-  "@rmdes/indiekit-endpoint-micropub",
-  "@rmdes/indiekit-endpoint-syndicate",
-  "@indiekit/endpoint-json-feed",
-  "@rmdes/indiekit-endpoint-webmention-sender",
-  "@rmdes/indiekit-endpoint-files",
-  "@rmdes/indiekit-endpoint-conversations",
-  // IndieNews (safe without config — just unchecked by default)
-  "@rmdes/indiekit-syndicator-indienews",
-];
-
-// Conditional syndicators — only load when required env vars are present
-if (process.env.MASTODON_INSTANCE) {
-  plugins.push("@rmdes/indiekit-syndicator-mastodon");
-}
-if (process.env.BLUESKY_HANDLE) {
-  plugins.push("@rmdes/indiekit-syndicator-bluesky");
-}
-if (process.env.LINKEDIN_ACCESS_TOKEN || process.env.LINKEDIN_CLIENT_ID) {
-  plugins.push("@rmdes/indiekit-syndicator-linkedin");
-  plugins.push("@rmdes/indiekit-endpoint-linkedin");
-}
-if (process.env.WEBMENTION_IO_TOKEN) {
-  plugins.push("@rmdes/indiekit-endpoint-webmention-io");
-}
 
 export default {
   application: {
@@ -72,7 +38,9 @@ export default {
     // ],
   },
 
-  plugins,
+  plugins: [
+{{PLUGINS}}
+  ],
 
   // Local file storage
   "@indiekit/store-file-system": {

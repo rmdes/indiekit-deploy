@@ -1,10 +1,45 @@
-.PHONY: up up-full down logs build restart shell-indiekit shell-eleventy shell-cron backup status \
+.PHONY: compose plugin-list plugin-add plugin-remove up down logs build restart status \
+       shell-indiekit shell-eleventy shell-cron shell-caddy backup restore init update-theme \
        build-release tag push release version ci ci-status \
        migrate-build migrate-detect migrate-convert migrate-preview migrate-apply migrate-shell
 
-# ─── Core profile ───
+# ─── Registry compose ───
+#
+# Regenerate .compiled/{package.json,indiekit.config.js,plugin-loadout.json} from
+# config/plugins.yaml + the plugin-registry submodule. Runs before every build so
+# the Docker images always consume a fresh composed plugin set.
 
-up:
+compose: | scripts/node_modules
+	node scripts/compose-site.mjs
+
+# Host-side dependency for the compose step (js-yaml); auto-installed on a fresh
+# clone so `make compose`/`build`/`up` work even before `make init` runs.
+scripts/node_modules: scripts/package-lock.json
+	npm ci --prefix scripts
+
+# Pretty-print the effective plugin set for this deployment.
+plugin-list: compose
+	@node -e "const l=require('./.compiled/plugin-loadout.json'); \
+	  console.log('Plugins for indiekit-deploy ('+l.summary.total+' total):'); \
+	  for (const p of l.selected) console.log('  '+String(p.tier).padEnd(12)+' '+p.key+'  ('+p.package+(p.version?'@'+p.version:'')+')'); \
+	  if (l.warnings.length) { console.log('Warnings:'); for (const w of l.warnings) console.log('  '+w); }"
+
+# Enable/disable a non-core plugin in config/plugins.yaml, then recompose.
+#   make plugin-add KEY=github
+#   make plugin-remove KEY=github
+plugin-add:
+	@test -n "$(KEY)" || (echo "ERROR: KEY not set (usage: make plugin-add KEY=github)" && exit 1)
+	node scripts/plugin-edit.mjs add $(KEY)
+	$(MAKE) compose
+
+plugin-remove:
+	@test -n "$(KEY)" || (echo "ERROR: KEY not set (usage: make plugin-remove KEY=github)" && exit 1)
+	node scripts/plugin-edit.mjs remove $(KEY)
+	$(MAKE) compose
+
+# ─── Lifecycle ───
+
+up: compose
 	docker compose up -d
 
 down:
@@ -13,7 +48,7 @@ down:
 logs:
 	docker compose logs -f
 
-build:
+build: compose
 	docker compose build --no-cache
 
 restart:
@@ -21,33 +56,6 @@ restart:
 
 status:
 	docker compose ps
-
-# ─── Full profile ───
-#
-# Compose 2.39+ no longer honors `profiles: []` overrides to clear a parent's
-# profile gate, so we activate the redis profile explicitly here. Removing
-# the `--profile redis` flag will reproduce the "service indiekit depends on
-# undefined service redis" error.
-#
-# When -f flags are passed, Compose disables auto-loading of
-# docker-compose.override.yml. We include it conditionally so dev settings
-# (Caddyfile.dev, PASSWORD_SECRET, etc.) still apply.
-COMPOSE_FULL := docker compose --profile redis \
-	-f docker-compose.yml \
-	-f docker-compose.full.yml \
-	$(if $(wildcard docker-compose.override.yml),-f docker-compose.override.yml,)
-
-up-full:
-	$(COMPOSE_FULL) up -d
-
-build-full:
-	$(COMPOSE_FULL) build --no-cache
-
-restart-full:
-	$(COMPOSE_FULL) restart
-
-logs-full:
-	$(COMPOSE_FULL) logs -f
 
 # ─── Shells ───
 
@@ -95,8 +103,10 @@ restore:
 
 # ─── Submodule ───
 
+# Initialize BOTH submodules: eleventy-site (theme) + plugin-registry (catalog).
 init:
 	git submodule update --init --recursive
+	npm ci --prefix scripts
 
 update-theme:
 	git submodule update --remote eleventy-site
@@ -104,13 +114,13 @@ update-theme:
 
 # ─── Docker Hub ───
 
-# Version from package.core.json (upstream Indiekit version)
-VERSION := $(shell node -p "require('./docker/indiekit/package.core.json').dependencies['@indiekit/indiekit']")
+# Version from the root package.json (upstream Indiekit version pin)
+VERSION := $(shell node -p "require('./package.json').dependencies['@indiekit/indiekit']")
 REGISTRY := rmdes
 
-# Build full-profile images with version tags
-build-release:
-	docker compose -f docker-compose.yml -f docker-compose.full.yml build --no-cache
+# Build release images with version tags (composed plugin set)
+build-release: compose
+	docker compose build --no-cache
 
 # Tag images with version number (in addition to :latest)
 tag:

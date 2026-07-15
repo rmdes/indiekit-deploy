@@ -1,4 +1,11 @@
-# Indiekit Caddyfile — Core profile
+# Indiekit Caddyfile — single superset of plugin routes
+#
+# The core/full profile split is retired: which plugins actually load is decided
+# by config/plugins.yaml + the registry (compiled into the image). This Caddyfile
+# carries the UNION of every plugin's routes. A route whose plugin is NOT enabled
+# simply proxies to Indiekit and 404s there — harmless.
+# ponytail: superset of plugin routes; a disabled plugin's route simply 404s at
+# indiekit — generate from plugin-loadout.json only if that surface ever matters.
 #
 # Automatic HTTPS via Let's Encrypt for {$DOMAIN}.
 # Serves Eleventy static site + proxies Indiekit API endpoints.
@@ -42,7 +49,7 @@
 		header Cache-Control "public, max-age=2592000, immutable"
 	}
 
-	# ─── Indiekit API and admin endpoints (proxy to indiekit:8080) ───
+	# ─── Indiekit core API and admin endpoints ───
 	handle /micropub* {
 		reverse_proxy indiekit:8080
 	}
@@ -93,6 +100,27 @@
 	handle /image/* {
 		reverse_proxy indiekit:8080
 	}
+	handle /comments* {
+		reverse_proxy indiekit:8080
+	}
+	# site-config is core-tier (always loaded) — its admin UI mounts at /site-config
+	handle /site-config* {
+		reverse_proxy indiekit:8080
+	}
+
+	# ─── ActivityPub federation (CORS + proxy) ───
+	handle /activitypub* {
+		header Access-Control-Allow-Origin "*"
+		header Access-Control-Allow-Methods "GET, POST, OPTIONS"
+		header Access-Control-Allow-Headers "Accept, Content-Type, Authorization, Signature, Digest, Date"
+		reverse_proxy indiekit:8080
+	}
+
+	# ─── NodeInfo (federation discovery, CORS) ───
+	handle /nodeinfo/* {
+		header Access-Control-Allow-Origin "*"
+		reverse_proxy indiekit:8080
+	}
 
 	# ─── Feed files with WebSub Link header ───
 	handle /feed.xml {
@@ -107,6 +135,42 @@
 	}
 	redir /feed /feed.xml 301
 	redir /feed/ /feed.xml 301
+
+	# ─── Optional plugin endpoints (enabled per config/plugins.yaml) ───
+	# Present here as a superset; a route whose plugin is disabled 404s at indiekit.
+	handle /githubapi* {
+		reverse_proxy indiekit:8080
+	}
+	handle /funkwhaleapi* {
+		reverse_proxy indiekit:8080
+	}
+	handle /lastfmapi* {
+		reverse_proxy indiekit:8080
+	}
+	handle /youtubeapi* {
+		reverse_proxy indiekit:8080
+	}
+	handle /rssapi* {
+		reverse_proxy indiekit:8080
+	}
+	handle /podrollapi* {
+		reverse_proxy indiekit:8080
+	}
+	handle /microsub* {
+		reverse_proxy indiekit:8080
+	}
+	handle /blogrollapi* {
+		reverse_proxy indiekit:8080
+	}
+	handle /homepage* {
+		reverse_proxy indiekit:8080
+	}
+	handle /cv* {
+		reverse_proxy indiekit:8080
+	}
+	handle /readlater* {
+		reverse_proxy indiekit:8080
+	}
 
 	# ─── Indiekit admin shortcuts ───
 	redir /admin /session/login?redirect=/dashboard
@@ -147,6 +211,22 @@
 	# Old format: /content/TYPE/YYYY-MM-DD-slug/ → /TYPE/YYYY/MM/DD/slug/
 	@legacy_content path_regexp legacy ^/content/(articles|notes|bookmarks|likes|reposts|photos|replies|videos|audio|jams|rsvps|events)/(\d{4})-(\d{2})-(\d{2})-(.+?)/?$
 	redir @legacy_content /{re.legacy.1}/{re.legacy.2}/{re.legacy.3}/{re.legacy.4}/{re.legacy.5}/ 301
+
+	# ─── ActivityPub content negotiation ───
+	# AP clients (Mastodon, etc.) request application/activity+json or application/ld+json
+	# Proxy those to Indiekit for AS2 representations; serve static files for everyone else
+	@activitypub {
+		header Accept *application/activity+json*
+	}
+	@activitypub_ld {
+		header Accept *application/ld+json*
+	}
+	handle @activitypub {
+		reverse_proxy indiekit:8080
+	}
+	handle @activitypub_ld {
+		reverse_proxy indiekit:8080
+	}
 
 	# ─── Markdown for Agents ───
 	# Serve clean Markdown for articles via .md URL extension

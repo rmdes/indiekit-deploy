@@ -1,0 +1,41 @@
+# config/plugins.yaml — per-deployment plugin selection (registry-driven)
+#
+# This file lists ONLY the plugins that DIFFER from the registry defaults
+# (plugin-registry/plugin-registry.yaml). To enable a plugin set `enabled: true`;
+# to turn off a registry default set `enabled: false`.
+#
+#   - The `core` tier is implicit and ALWAYS loaded (auth, posts, micropub,
+#     site-config, preset-eleventy, store-file-system, json-feed, page, …) — do
+#     NOT list core plugins here.
+#   - The 7 base post types (article, note, photo, bookmark, reply, repost, like)
+#     are `default_enabled: true` in the registry, so they load implicitly too.
+#
+# After editing, recompose with `node scripts/compose-site.mjs` (or `make compose`)
+# and rebuild the images. See plugin-registry/plugin-registry.yaml for every
+# available key and its tier.
+#
+# The set below reproduces indiekit-deploy's historical "core" profile: all four
+# syndicators plus the endpoints the core config loaded that are off by default
+# in the registry. Full-profile-only plugins (github, funkwhale, activitypub,
+# microsub, rss, podroll, blogroll, cv, comments, readlater, extra post types)
+# are intentionally left disabled — enable them here as you need them.
+
+syndicators:
+  mastodon:
+    enabled: true
+  bluesky:
+    enabled: true
+  linkedin:
+    enabled: true
+  indienews:
+    enabled: true
+
+endpoints:
+  webmention-sender:
+    enabled: true
+  webmention-io:
+    enabled: true
+  conversations:
+    enabled: true
+  linkedin-oauth:
+    enabled: true

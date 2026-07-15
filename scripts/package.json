@@ -1,0 +1,9 @@
+{
+  "name": "indiekit-deploy-scripts",
+  "version": "0.0.0-private",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "js-yaml": "^4.1.0"
+  }
+}

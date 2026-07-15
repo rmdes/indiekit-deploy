@@ -24,7 +24,7 @@ A complete guide to deploying [Indiekit](https://getindiekit.com) on your own se
 8. [Write Your First Post](#8-write-your-first-post)
 9. [Set Up Syndication](#9-set-up-syndication)
 10. [Set Up Webmentions](#10-set-up-webmentions)
-11. [Enable the Full Plugin Set](#11-enable-the-full-plugin-set)
+11. [Enable Extra Plugins](#11-enable-extra-plugins)
 12. [Backup and Restore](#12-backup-and-restore)
 13. [Updating](#13-updating)
 14. [Troubleshooting](#14-troubleshooting)
@@ -115,13 +115,13 @@ git clone https://github.com/rmdes/indiekit-deploy.git
 cd indiekit-deploy
 ```
 
-Initialize the Eleventy theme submodule:
+Initialize the submodules and compose dependencies:
 
 ```bash
 make init
 ```
 
-This pulls the Eleventy theme that powers your site's frontend.
+This pulls the Eleventy theme (your site's frontend) and the plugin registry (the plugin catalog), and installs the host-side deps used to compose the plugin set.
 
 ---
 
@@ -207,17 +207,13 @@ Save and close.
 
 ## 5. Launch the Stack
 
-For the core plugin set (recommended to start):
+Start the stack (`make up` composes the plugin set from `config/plugins.yaml` + the registry, then brings the containers up):
 
 ```bash
 make up
 ```
 
-Or equivalently:
-
-```bash
-docker compose up -d
-```
+The default `config/plugins.yaml` ships a functional IndieWeb blog (base post types + four syndicators + webmentions + conversations). You can enable more plugins later — see [section 11](#11-enable-extra-plugins).
 
 This starts 5 containers:
 
@@ -239,8 +235,9 @@ You should see:
 
 ```
 caddy-1    | ... certificate obtained successfully
-indiekit-1 | ==> Indiekit entrypoint (profile: core)
+indiekit-1 | ==> Indiekit entrypoint
 indiekit-1 | ==> Generating JWT secret
+indiekit-1 | ==> Installing composed config to /data/config/
 indiekit-1 | ==> Starting Indiekit on port 8080
 eleventy-1 | ==> Waiting for Indiekit at http://indiekit:8080...
 eleventy-1 | ==> Indiekit is ready
@@ -432,40 +429,43 @@ The Eleventy theme automatically displays webmentions (likes, replies, reposts) 
 
 ---
 
-## 11. Enable the Full Plugin Set
+## 11. Enable Extra Plugins
 
-The core profile gives you a functional IndieWeb blog. The full profile adds extra integrations:
+The default plugin set gives you a functional IndieWeb blog. A shared **plugin registry** (`plugin-registry/plugin-registry.yaml`) carries the full catalog; you turn extra plugins on per deployment in `config/plugins.yaml`:
 
-| Plugin | What it does |
+| Plugin key | What it does |
 |--------|-------------|
-| GitHub | Shows your GitHub activity, stars, and contributions |
-| Funkwhale | Displays listening history from a Funkwhale instance |
-| Last.fm | Shows scrobbles, loved tracks, and listening stats |
-| YouTube | Displays your YouTube channel activity |
-| RSS | Aggregates and caches external RSS feeds |
-| Microsub | Social reader with feed subscriptions |
-| Podroll | Aggregates podcast episodes from FreshRSS |
-| Blogroll | Manages a blogroll with OPML/Microsub import |
-| Homepage | Configurable homepage sections |
-| CV | Manage and display a resume/CV |
+| `github` | Shows your GitHub activity, stars, and contributions |
+| `funkwhale` | Displays listening history from a Funkwhale instance |
+| `lastfm` | Shows scrobbles, loved tracks, and listening stats |
+| `youtube` | Displays your YouTube channel activity |
+| `rss` | Aggregates and caches external RSS feeds |
+| `microsub` | Social reader with feed subscriptions |
+| `podroll` | Aggregates podcast episodes from FreshRSS |
+| `blogroll` | Manages a blogroll with OPML/Microsub import |
+| `cv` | Manage and display a resume/CV |
+| `comments` | Visitor comments via IndieAuth/RelMeAuth |
+| `readlater` | Save URLs for later consumption |
+| `activitypub` | Full ActivityPub federation (requires Redis) |
 
-To switch to the full profile, stop the stack and start with the full override:
-
-```bash
-docker compose down
-docker compose -f docker-compose.yml -f docker-compose.full.yml up -d
-```
-
-Or use the Makefile shortcut:
+Enable the ones you want, then recompose and rebuild:
 
 ```bash
-make down
-make up-full
+make plugin-list             # see the current composed set
+make plugin-add KEY=github   # enable a plugin (edits config/plugins.yaml)
+make plugin-add KEY=lastfm
+# …or edit config/plugins.yaml by hand, then:
+make compose                 # regenerate .compiled/
+make build && make up        # rebuild the image with the new set + restart
 ```
 
-**Important:** the first time you switch to full profile, the Indiekit container is rebuilt with all plugins installed. This takes a few minutes.
+Run `make plugin-list` after composing to confirm what will ship. See `plugin-registry/plugin-registry.yaml` for every available key.
 
-### Configure Full Profile Plugins
+**Important:** the plugin set is baked into the image at build time, so enabling a plugin requires `make build` (a few minutes) — not just a restart.
+
+> **ActivityPub needs Redis.** After `make plugin-add KEY=activitypub`, start the Redis service and point Indiekit at it: `docker compose --profile redis up -d` and set `REDIS_URL=redis://redis:6379` in `.env`.
+
+### Configure Extra Plugins
 
 Add the relevant environment variables to your `.env`. Each plugin only activates when its required env vars are set — you only need to fill in the ones you want:
 
@@ -512,11 +512,11 @@ LINKEDIN_CLIENT_SECRET=WPLsecret123abc
 # LINKEDIN_PROFILE_URL=https://www.linkedin.com/in/janedoe/
 ```
 
-After updating `.env`, rebuild the full profile:
+After updating `.env`, rebuild and restart:
 
 ```bash
-make build-full
-make up-full
+make build
+make up
 ```
 
 ### LinkedIn OAuth Flow
@@ -581,15 +581,11 @@ git pull
 # Update the Eleventy theme
 make update-theme
 
-# Rebuild images with new code
-make build        # core profile
-# or
-make build-full   # full profile
+# Rebuild images with new code (composes the plugin set first)
+make build
 
 # Restart with new images
-make up           # core
-# or
-make up-full      # full
+make up
 ```
 
 ### Using Pre-built Images
@@ -605,7 +601,7 @@ Available images:
 
 | Image | Description |
 |-------|-------------|
-| [`rmdes/indiekit-deploy-server`](https://hub.docker.com/r/rmdes/indiekit-deploy-server) | Indiekit server (full plugin set) |
+| [`rmdes/indiekit-deploy-server`](https://hub.docker.com/r/rmdes/indiekit-deploy-server) | Indiekit server (single image; ships the repo's default plugin set — rebuild locally if you enable extras) |
 | [`rmdes/indiekit-deploy-site`](https://hub.docker.com/r/rmdes/indiekit-deploy-site) | Eleventy static site builder |
 | [`rmdes/indiekit-deploy-cron`](https://hub.docker.com/r/rmdes/indiekit-deploy-cron) | Cron sidecar |
 
@@ -727,14 +723,15 @@ make shell-caddy       # Caddy container
 ### Useful Commands
 
 ```bash
-make up              # Start (core profile)
-make up-full         # Start (full profile)
+make up              # Compose plugin set + start
 make down            # Stop everything
 make logs            # Follow all logs
 make restart         # Restart all services
 make status          # Show running services
-make build           # Rebuild images (core)
-make build-full      # Rebuild images (full)
+make build           # Compose plugin set + rebuild images
+make plugin-list     # Show the effective composed plugin set
+make plugin-add KEY=github     # Enable a plugin
+make plugin-remove KEY=github  # Disable a plugin
 make backup          # Backup all data
 make update-theme    # Pull latest theme
 ```

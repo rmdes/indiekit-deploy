@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       version_override:
-        description: "Override version tag (leave empty to use package.core.json)"
+        description: "Override version tag (leave empty to use root package.json)"
         required: false
         type: string
 
@@ -27,19 +27,12 @@ jobs:
         include:
           - image: indiekit-deploy-server
             dockerfile: docker/indiekit/Dockerfile
-            build_args: PROFILE=core
-          - image: indiekit-deploy-server-full
-            dockerfile: docker/indiekit/Dockerfile
-            build_args: PROFILE=full
           - image: indiekit-deploy-site
             dockerfile: docker/eleventy/Dockerfile
-            build_args: ""
           - image: indiekit-deploy-cron
             dockerfile: docker/cron/Dockerfile
-            build_args: ""
           - image: indiekit-deploy-migrator
             dockerfile: docker/migrator/Dockerfile
-            build_args: ""
 
     steps:
       - name: Checkout
@@ -54,6 +47,14 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      # Generate .compiled/{package.json,indiekit.config.js,plugin-loadout.json}
+      # from config/plugins.yaml + the plugin-registry submodule. The indiekit
+      # image's Dockerfile does `COPY .compiled/...`, so these must exist before
+      # the docker build. `make compose` installs the scripts deps (js-yaml) and
+      # runs scripts/compose-site.mjs.
+      - name: Compose plugin set
+        run: make compose
+
       - name: Extract version
         id: version
         env:
@@ -62,7 +63,7 @@ jobs:
           if [ -n "$VERSION_OVERRIDE" ]; then
             echo "tag=${VERSION_OVERRIDE}" >> "$GITHUB_OUTPUT"
           else
-            VERSION=$(node -p "require('./docker/indiekit/package.core.json').dependencies['@indiekit/indiekit']")
+            VERSION=$(node -p "require('./package.json').dependencies['@indiekit/indiekit']")
             echo "tag=${VERSION}" >> "$GITHUB_OUTPUT"
           fi
           echo "sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
@@ -88,7 +89,6 @@ jobs:
           file: ${{ matrix.dockerfile }}
           platforms: linux/amd64,linux/arm64
           push: true
-          build-args: ${{ matrix.build_args }}
           tags: |
             ${{ env.REGISTRY_DH }}/${{ env.IMAGE_OWNER }}/${{ matrix.image }}:latest
             ${{ env.REGISTRY_DH }}/${{ env.IMAGE_OWNER }}/${{ matrix.image }}:${{ steps.version.outputs.tag }}

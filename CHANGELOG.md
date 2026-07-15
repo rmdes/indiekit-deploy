@@ -2,6 +2,40 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-07-15 — Registry-driven plugin architecture
+
+Replaces the hand-maintained `core`/`full` plugin profiles with a shared plugin **registry** + a per-deployment **`config/plugins.yaml`**. Plugin selection is now composed at build time instead of being split across duplicated package/config files. See **[MIGRATION.md](MIGRATION.md)** for the operator upgrade path.
+
+### Plugin selection (BREAKING)
+
+- **One image, no profiles.** The `PROFILE=core|full` build arg is gone; there is a single `rmdes/indiekit-deploy-server` image (the `-full` variant is retired). Plugin choice lives in one file, `config/plugins.yaml` (deltas vs the registry defaults), not two package/config files kept in sync.
+- **New `plugin-registry/` git submodule** — the shared plugin catalog + version pins, the same one `indiekit-cloudron` consumes. `scripts/compose-site.mjs` delegates to `plugin-registry/scripts/compose-core.mjs` so both deployments compose identically.
+- **`make compose`** generates `.compiled/{package.json,indiekit.config.js,plugin-loadout.json}` from `config/plugins.yaml` + the registry + `config/indiekit.config.template.js` + the root `package.json` overrides. `make up` and `make build` run it first.
+- **New Makefile targets:** `make compose`, `make plugin-list`, `make plugin-add KEY=…`, `make plugin-remove KEY=…`. **Removed:** `make up-full`, `make build-full`, `make restart-full`, `make logs-full`. `make init` now initializes both submodules and installs the compose deps.
+
+### Config is now a build artifact
+
+- `/data/config/indiekit.config.js` is composed from `config/indiekit.config.template.js` (with a `{{PLUGINS}}` placeholder) and **re-installed on every container boot** — no longer a first-run-only, hand-editable file. This guarantees a rebuilt image's plugin set always reaches the running app and prevents stale configs from referencing plugins the new image no longer installs (`ERR_MODULE_NOT_FOUND` crash loop). Customize via `config/plugins.yaml`, the template, and `.env`.
+
+### Identity via site-config plugin
+
+- Per-deployment identity/branding now comes from the always-on `@rmdes/indiekit-endpoint-site-config` plugin, seeded from `.env` (`SITE_NAME`, `AUTHOR_NAME`, `SITE_DESCRIPTION`, `SITE_TIMEZONE`, `SITE_LOCALE`) on first boot, then editable in the site-config admin UI.
+
+### Version pins
+
+- **Forked default plugins** (auth, posts, micropub, syndicate, files, share, frontend): pinned in the root `package.json` `overrides`.
+- **Everything else:** pinned in `plugin-registry.yaml` (shared with `indiekit-cloudron`); move this repo's submodule pointer forward to adopt a bump.
+
+### Removed files
+
+- `docker-compose.full.yml`, `config/indiekit.config.js`, `config/indiekit.config.full.js`, `docker/indiekit/package.core.json`, `docker/indiekit/package.full.json`, `docker/caddy/Caddyfile.full`.
+
+### CI
+
+- `.github/workflows/build-images.yml` now runs `make compose` before the docker build (so `.compiled/` exists for the `COPY .compiled/…` step), builds the single `indiekit-deploy-server` image (dropped the `-full` matrix entry and the `PROFILE` build args), and reads the version tag from the root `package.json`.
+
+> **Note:** the Ansible provisioning path has **not** yet been ported to the registry model — use the Docker Compose flow for now.
+
 ## 2026-05-08 — Migration system + plugin updates
 
 Adds a one-shot static-site migration toolkit (Jekyll/Hugo/micro.blog → Indiekit) and brings every plugin to current versions. Documentation reorganized so plugin lists point to source-of-truth files instead of inline copies that drift.

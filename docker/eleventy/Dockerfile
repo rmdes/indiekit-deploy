@@ -13,6 +13,12 @@ COPY eleventy-site/ /app/
 # These replace the theme's personal content without modifying the submodule
 COPY docker/eleventy/overrides/ /app/
 
+# Composed plugin loadout (which plugins are enabled for THIS deployment).
+# The theme's _data/loadedPlugins.js reads it at RUNTIME_PATH to gate widgets and
+# nav links ({% if loadedPlugins.cv %} …). Baked here, placed at that path by the
+# entrypoint on startup (build context is the repo root — .compiled/ is in scope).
+COPY .compiled/plugin-loadout.json /app/loaded-plugins.json
+
 # Install dependencies
 RUN npm install
 

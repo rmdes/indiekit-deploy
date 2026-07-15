@@ -10,6 +10,19 @@ echo "==> Eleventy entrypoint"
 # Ensure output directories exist
 mkdir -p /data/site /data/cache "$RELEASES_DIR"
 
+# Expose the composed plugin loadout to the theme. The theme's
+# _data/loadedPlugins.js reads the hardcoded RUNTIME_PATH
+# /app/data/content/_data/loaded-plugins.json and converts the loadout's
+# `selected[]` into a { <key>: true } map so templates can gate widgets/sections
+# ({% if loadedPlugins.cv %}). Baked into the image at /app/loaded-plugins.json;
+# copied to that path here (idempotent) BEFORE the build. Container-local — this
+# is NOT the /data/content volume; the theme reads the absolute path directly.
+if [ -f /app/loaded-plugins.json ]; then
+    mkdir -p /app/data/content/_data
+    cp -f /app/loaded-plugins.json /app/data/content/_data/loaded-plugins.json
+    echo "  Exposed loaded-plugins.json to theme (_data/)"
+fi
+
 # Migrate from flat /data/site to releases structure (first run after upgrade)
 # If /data/site/current doesn't exist but there are HTML files at the root,
 # the volume has old-style flat content — move it into a release.

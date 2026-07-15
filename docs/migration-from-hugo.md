@@ -548,7 +548,7 @@ back up:
 ```bash
 docker compose down
 docker volume rm indiekit-deploy_content indiekit-deploy_uploads
-make up-full
+make up
 ```
 
 Then re-run the migration. **This deletes all content in those

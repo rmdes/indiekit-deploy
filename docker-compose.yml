@@ -1,11 +1,11 @@
-# Indiekit Docker Compose — Core services (minimal plugin set)
+# Indiekit Docker Compose
+#
+# The plugin set is composed from config/plugins.yaml + the plugin-registry
+# (make compose → .compiled/) — there is no core/full profile split anymore.
 #
 # Usage:
 #   cp .env.example .env   # Edit with your values
-#   docker compose up -d
-#
-# For full plugin set:
-#   docker compose -f docker-compose.yml -f docker-compose.full.yml up -d
+#   make up                # runs `make compose` then `docker compose up -d`
 
 services:
   mongodb:
@@ -14,6 +14,11 @@ services:
       - mongodb_data:/data/db
     restart: unless-stopped
 
+  # Optional: only needed when a plugin that uses it is enabled (e.g. the
+  # ActivityPub endpoint's Fedify KV store). Gated behind the `redis` profile so
+  # it does NOT start by default. Enable with `docker compose --profile redis up -d`
+  # (or add it to a docker-compose.override.yml) and set REDIS_URL=redis://redis:6379.
+  # Nothing in this file depends_on redis, so the profile gate is self-contained.
   redis:
     image: redis:7-alpine
     restart: unless-stopped
@@ -33,6 +38,11 @@ services:
       - PORT=8080
     volumes:
       - content:/data/content
+      # Also mount content at /app/data/content — the shared theme + site-config
+      # plugin hardcode that Cloudron-style path for runtime artifacts
+      # (site-config.json, theme.css, homepage.json, loaded-plugins.json). Mounting
+      # the same volume here lets site-config's writes cross to the eleventy container.
+      - content:/app/data/content
       - uploads:/data/uploads
       - indiekit_config:/data/config
     restart: unless-stopped
@@ -49,6 +59,8 @@ services:
       - INDIEKIT_URL=http://indiekit:8080
     volumes:
       - content:/data/content
+      # See indiekit service: theme reads runtime artifacts from /app/data/content/_data.
+      - content:/app/data/content
       - site:/data/site
       - cache:/data/cache
       - uploads:/data/uploads

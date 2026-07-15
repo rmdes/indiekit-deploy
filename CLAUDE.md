@@ -6,9 +6,7 @@ Docker Compose + Ansible deployment for Indiekit. Platform-agnostic alternative 
 
 This repository provides production-ready deployment of Indiekit using Docker Compose. It orchestrates MongoDB, Indiekit (Node.js), Eleventy (static site generator), Caddy (HTTPS reverse proxy), and a cron sidecar for background tasks (syndication, webmentions).
 
-**Two plugin profiles:**
-- **Core** (default): Minimal IndieWeb blog (article, note, photo, bookmark, like, reply, repost, page)
-- **Full**: All `@rmdes/*` plugins (GitHub, Funkwhale, Last.fm, YouTube, RSS, Microsub, Webmentions proxy, Podroll, extra post types)
+**Registry-driven plugin selection (single image):** There are no more `core`/`full` profiles. The plugin set is composed at build time from the `plugin-registry/` submodule (shared catalog + version pins, same one `indiekit-cloudron` uses) plus this repo's `config/plugins.yaml` deltas. `make compose` generates `.compiled/{package.json,indiekit.config.js,plugin-loadout.json}`, which the single `indiekit` image builds from. The `core` tier and the seven base post types (article, note, photo, bookmark, reply, repost, like) always load; everything else (github, funkwhale, lastfm, youtube, rss, microsub, podroll, blogroll, cv, comments, readlater, activitypub, extra post types) is enabled per deployment in `plugins.yaml`. See `MIGRATION.md` for the operator upgrade path from the old profiles.
 
 ## Architecture
 
@@ -26,7 +24,7 @@ Caddy :443 (auto HTTPS via Let's Encrypt; :443/UDP for HTTP/3)
        ├─ MongoDB (data store)
        ├─ Eleventy (watches /data/content, atomic release swap to /data/site/releases/)
        ├─ Cron sidecar (syndication every 2m, webmentions every 5m)
-       ├─ Redis (Fedify KV store + plugin cache; mandatory for full profile)
+       ├─ Redis (Fedify KV store + plugin cache; mandatory when the activitypub plugin is enabled)
        └─ Migrator (one-shot, profile-gated; Jekyll/Hugo/micro.blog → Indiekit)
 ```
 
@@ -39,7 +37,7 @@ Caddy :443 (auto HTTPS via Let's Encrypt; :443/UDP for HTTP/3)
 | **eleventy** | Static site builder (watch mode) | Built from `docker/eleventy/Dockerfile` | — | `content` (read), `site`, `cache`, `uploads` (read) |
 | **caddy** | HTTPS reverse proxy | `caddy:2-alpine` | 80, 443, 443/UDP (HTTP/3) | `site` (read), `uploads` (read), `content` (read), `caddy_data`, `caddy_config`, `./docker/caddy/migration-redirects` (bind, read) |
 | **cron** | Background jobs (syndication, webmentions) | Built from `docker/cron/Dockerfile` | — | `indiekit_config` (read) |
-| **redis** | Fedify KV store + plugin cache | `redis:7-alpine` | 6379 (internal) | — — *Profile-gated `redis` in core (optional). Mandatory for Full profile (AP plugin requires it).* |
+| **redis** | Fedify KV store + plugin cache | `redis:7-alpine` | 6379 (internal) | — — *Profile-gated `redis` (optional). Mandatory when the `activitypub` plugin is enabled (AP plugin requires it) — start with `docker compose --profile redis up -d` and set `REDIS_URL`.* |
 | **migrator** | One-shot static-site → Indiekit migration tool (Jekyll/Hugo/micro.blog) | Built from `docker/migrator/Dockerfile` | — | `./migration` (bind), `./docker/caddy` (bind), `content`, `uploads` — *Profile-gated `migrate`. Activated via `make migrate-*` commands.* |
 
 ### Data Flow
@@ -70,8 +68,7 @@ All data lives in named Docker volumes (persists across container restarts):
 
 | File | Purpose |
 |------|---------|
-| `docker-compose.yml` | Core services (MongoDB, Indiekit, Eleventy, Caddy, Cron) |
-| `docker-compose.full.yml` | Override for full plugin profile (build arg `PROFILE=full`) |
+| `docker-compose.yml` | All services (MongoDB, Indiekit, Eleventy, Caddy, Cron; `redis` and `migrator` profile-gated) |
 | `docker-compose.override.example.yml` | Template for local overrides (e.g., HTTP-only Caddyfile) |
 
 ### Configuration
@@ -79,13 +76,16 @@ All data lives in named Docker volumes (persists across container restarts):
 | File | Purpose |
 |------|---------|
 | `.env.example` | Template for environment variables (copy to `.env`) |
-| `config/indiekit.config.js` | Core profile plugins |
-| `config/indiekit.config.full.js` | Full profile plugins |
+| `config/plugins.yaml` | Per-deployment plugin **deltas** vs the registry defaults (enable/disable non-core plugins). Source of truth for plugin selection. |
+| `config/indiekit.config.template.js` | Config template with a `{{PLUGINS}}` placeholder; the composer fills the plugins array from the registry. Edit here for config structure / per-plugin options. |
+| `plugin-registry/plugin-registry.yaml` | Shared plugin catalog + version pins (git submodule of `indiekit-plugin-registry`). |
+| `.compiled/{package.json,indiekit.config.js,plugin-loadout.json}` | **Generated** by `make compose` from the three files above — never hand-edit. Consumed by the Docker build. |
 
-**CRITICAL: Config file selection**
-- The `docker/indiekit/entrypoint.sh` copies the appropriate config to `/data/config/indiekit.config.js` on first run
-- After first run, the persistent volume copy is used (allows user editing in-place)
-- To reset config, delete `/data/config/indiekit.config.js` and restart
+**CRITICAL: Config is a build artifact (composed, re-installed every boot)**
+- `make compose` (via `scripts/compose-site.mjs`) reads `config/plugins.yaml` + `plugin-registry/plugin-registry.yaml` + `config/indiekit.config.template.js` + the root `package.json` overrides → writes `.compiled/`
+- The Dockerfile `COPY .compiled/{package.json,indiekit.config.js}` into the image
+- `docker/indiekit/entrypoint.sh` re-installs the composed config to `/data/config/indiekit.config.js` on **EVERY** boot (not first-run-only). This guarantees a rebuilt image's plugin set reaches the running app — a first-run-only copy would leave an upgraded deployment running a stale config referencing plugins the new image no longer installs (`ERR_MODULE_NOT_FOUND` crash loop)
+- Do **not** hand-edit the running config — it is overwritten. Customize via `config/plugins.yaml` (which plugins), `config/indiekit.config.template.js` (structure), and `.env` (values), then `make compose && make build`
 
 ### Patches Applied to Upstream Indiekit
 
@@ -104,9 +104,9 @@ When upstream Indiekit updates, diff the new files against our patches and re-ap
 #### indiekit (docker/indiekit/Dockerfile)
 
 - Base: `node:22-slim`
-- Build arg: `PROFILE` (core|full) → selects `package.${PROFILE}.json` for npm install
-- Copies both config files (entrypoint selects the right one)
-- Entrypoint: `docker/indiekit/entrypoint.sh` (generates JWT secret, selects config, starts Indiekit)
+- No `PROFILE` build arg — `COPY .compiled/package.json` (composed plugin set) then `npm install`
+- `COPY .compiled/indiekit.config.js` (composed config with the plugins array filled from the registry)
+- Entrypoint: `docker/indiekit/entrypoint.sh` (generates JWT secret, re-installs the composed config every boot, starts Indiekit)
 
 #### eleventy (docker/eleventy/Dockerfile)
 
@@ -140,8 +140,8 @@ When upstream Indiekit updates, diff the new files against our patches and re-ap
 
 | File | Purpose |
 |------|---------|
-| `docker/caddy/Caddyfile` | Core profile routes |
-| `docker/caddy/Caddyfile.full` | Full profile routes (adds `/githubapi`, `/funkwhaleapi`, etc.) |
+| `docker/caddy/Caddyfile` | All routes (single file — the core/full split is retired; includes plugin API routes and ActivityPub proxying) |
+| `docker/caddy/Caddyfile.dev` | HTTP-only variant for local development |
 
 **CRITICAL: Automatic HTTPS**
 - Caddy automatically provisions Let's Encrypt TLS for `{$DOMAIN}`
@@ -154,7 +154,7 @@ When upstream Indiekit updates, diff the new files against our patches and re-ap
 - This matches the Cloudron deployment's URL handling (reversed Feb 2026)
 - The Eleventy data cascade (`_data/eleventyComputed.js`) auto-converts stale `/content/` permalinks in frontmatter
 
-**ActivityPub federation (full profile):**
+**ActivityPub federation (when the `activitypub` plugin is enabled):**
 - Caddy proxies `/activitypub*` and `/nodeinfo/*` to Indiekit with CORS headers
 - AP content negotiation: requests with `Accept: application/activity+json` or `application/ld+json` are proxied to Indiekit for AS2 representations
 - Configured via env vars: `AP_HANDLE`, `AP_LOG_LEVEL`, `AP_DEBUG`, `AP_DEBUG_PASSWORD`
@@ -213,30 +213,30 @@ AUTHOR_NAME=Jane Doe                  # Your name
 - **Bluesky:** `BLUESKY_HANDLE`, `BLUESKY_PASSWORD`
 - **LinkedIn:** `LINKEDIN_ACCESS_TOKEN` or use OAuth at `/linkedin` (requires `LINKEDIN_CLIENT_ID`, `LINKEDIN_CLIENT_SECRET`)
 
-**Full profile endpoints:**
+**Extra plugin endpoints (enabled per deployment in `config/plugins.yaml`):**
 - `GITHUB_TOKEN`, `FUNKWHALE_INSTANCE`, `FUNKWHALE_TOKEN`, `LASTFM_API_KEY`, `YOUTUBE_API_KEY`, etc.
 
-### Plugin Profiles
+### Plugin Selection (registry-driven)
 
 **Source of truth — do NOT inline plugin lists in this doc:**
 
-- `docker/indiekit/package.core.json` — exact list of plugins installed in the **core** image
-- `docker/indiekit/package.full.json` — exact list installed in the **full** image
-- `config/indiekit.config.js` — runtime config used by the core image
-- `config/indiekit.config.full.js` — runtime config used by the full image
+- `plugin-registry/plugin-registry.yaml` — the shared catalog: every available plugin, its tier, and its version pin (for non-overridden plugins)
+- `config/plugins.yaml` — this deployment's deltas: which non-default plugins to enable / which registry defaults to turn off
+- `.compiled/plugin-loadout.json` — the resolved effective set (run `make plugin-list` to pretty-print it)
 
-Reading these files is the only reliable way to know which plugins ship in each profile. This doc previously inlined partial lists that drifted out of sync (e.g., listed a "Webmentions Proxy" plugin that was never installed).
+Run `make plugin-list` to see exactly which plugins ship. Do not re-inline lists here — this doc previously drifted (e.g., a "Webmentions Proxy" plugin that was never installed).
 
-**Profile shape (high level):**
+**How selection works:**
 
-- **Core** (`make up`): Minimal IndieWeb blog — base post types (article, bookmark, like, note, photo, reply, repost, page), Micropub, Syndicate, JSON Feed, Webmention Sender, Webmention.io, Conversations, the four syndicators (Mastodon, Bluesky, LinkedIn, IndieNews), and the LinkedIn OAuth endpoint. Conditional loading: syndicators only register when their respective env vars are set.
-- **Full** (`make up-full`): Core *plus* extra post types (audio, event, jam, rsvp, video) and the rich plugin set: GitHub, Funkwhale, Last.fm, YouTube, RSS, Microsub, Podroll, Blogroll, Homepage builder, CV, Comments, Read-later, and **ActivityPub federation** (mandates Redis).
+- The `core` tier (auth, posts, micropub, site-config, preset-eleventy, store-file-system, json-feed, page, …) and the seven base post types (article, note, photo, bookmark, reply, repost, like) always load and are NOT listed in `plugins.yaml`.
+- Everything else is opt-in via `config/plugins.yaml` — `make plugin-add KEY=…` / `make plugin-remove KEY=…` edit it, or edit by hand then `make compose`.
+- Conditional loading still applies at runtime: syndicators only register when their env vars are set.
+- The shipped `config/plugins.yaml` reproduces the old **core** set (four syndicators + webmention-sender/io + conversations + LinkedIn OAuth). Enabling github/funkwhale/lastfm/youtube/rss/microsub/podroll/blogroll/cv/comments/readlater/activitypub + extra post types reproduces the old **full** set.
 
-**CRITICAL: Profile selection**
-- Set via `PROFILE` build arg in `docker/indiekit/Dockerfile` (`core` or `full`)
-- `docker-compose.full.yml` overrides build arg to `PROFILE=full` and selects the `rmdes/indiekit-deploy-server-full` image
-- `docker/indiekit/entrypoint.sh` reads `INDIEKIT_PROFILE` env var to select the right config file at runtime
-- **Compose 2.39+ profile gate quirk:** `profiles: []` in an override file no longer clears a parent's profile gate. The `Makefile` activates the redis profile explicitly with `--profile redis` for `make up-full`. Removing this flag reproduces the error: *"service indiekit depends on undefined service redis"*. See `Makefile` `COMPOSE_FULL` definition.
+**CRITICAL: Composition + Redis**
+- Plugin selection is composed at build time by `make compose` (`scripts/compose-site.mjs`, which delegates to `plugin-registry/scripts/compose-core.mjs` so cloudron and deploy never drift on the algorithm). `make up` and `make build` run `make compose` first.
+- There is ONE `indiekit` image (`rmdes/indiekit-deploy-server`) — no `-full` variant, no `PROFILE` build arg.
+- The `redis` service is `profiles: [redis]`-gated in `docker-compose.yml`. Enabling the `activitypub` plugin makes Redis mandatory (Fedify KV store): `docker compose --profile redis up -d` and set `REDIS_URL=redis://redis:6379`.
 
 ## Deployment Workflow
 
@@ -247,17 +247,16 @@ Reading these files is the only reliable way to know which plugins ship in each 
 git clone https://github.com/rmdes/indiekit-deploy.git
 cd indiekit-deploy
 
-# 2. Init submodule
+# 2. Init submodules (theme + plugin-registry) + scripts deps
 make init
 
 # 3. Configure
 cp .env.example .env
 # Edit .env with your settings
+# (optional) choose plugins: make plugin-add KEY=github, edit config/plugins.yaml
 
-# 4. Start services
-make up              # Core profile
-# OR
-make up-full         # Full profile
+# 4. Start services (composes the plugin set first)
+make up
 
 # 5. Set admin password
 # Visit https://your-domain.com/session/login
@@ -297,8 +296,8 @@ make restore FILE=backups/indiekit-*.tar.gz
 | **TLS** | Cloudron auto-manages | Caddy (Let's Encrypt) |
 | **Background jobs** | Shell loops in `start.sh` | Cron sidecar container |
 | **File storage** | Cloudron `/app/data` | Named Docker volumes |
-| **Config** | `indiekit.config.js.rmendes` → `indiekit.config.js` (copied by `make prepare`) | `.env` + `config/indiekit.config.js` (copied by entrypoint) |
-| **Plugin profiles** | All plugins pre-installed, activated by config | Core by default, full via `docker-compose.full.yml` |
+| **Config** | Composed per-site (`sites/<site>/.compiled/`) → installed by `start.sh` | `.env` + composed `.compiled/indiekit.config.js` (re-installed by entrypoint every boot) |
+| **Plugin selection** | Registry + per-site `plugins.yaml` → `make compose` → composed image | Registry + `config/plugins.yaml` → `make compose` → composed image |
 | **Updates** | `cloudron build && cloudron update` | `git pull && make build && make up` |
 | **Eleventy theme** | Submodule + `overrides/eleventy-site/` (merged by `make prepare`) | Submodule + `docker/eleventy/overrides/` (merged by Dockerfile) |
 | **Zero-downtime** | Atomic release swap (`mv -T`) | Atomic release swap (`mv -T`) |
@@ -344,12 +343,10 @@ make restore FILE=backups/indiekit-*.tar.gz
 - **Fix:** Check `docker compose ps mongodb`, verify `MONGODB_URL` in docker-compose.yml
 - **Debug:** `docker compose logs mongodb`
 
-### Config changes not applying
+### Config / plugin changes not applying
 
-- **Cause:** Config file is copied to `/data/config/indiekit.config.js` on first run only
-- **Fix:** Either:
-  1. `make shell-indiekit` → edit `/data/config/indiekit.config.js` → `make restart`
-  2. Delete `/data/config/indiekit.config.js` and restart (re-copies from image)
+- **Cause:** The config is a build artifact re-installed from the image on every boot. Hand-editing `/data/config/indiekit.config.js` is pointless — the next boot overwrites it. Editing `config/plugins.yaml` or the template without recomposing + rebuilding also has no effect (the image still carries the old `.compiled/`).
+- **Fix:** Edit `config/plugins.yaml` (plugins) / `config/indiekit.config.template.js` (structure) / `.env` (values), then `make compose && make build && make up` to bake and run the new set.
 
 ### Stale Eleventy overrides
 
@@ -361,18 +358,22 @@ make restore FILE=backups/indiekit-*.tar.gz
 The Makefile is the source of truth — run `make help` or read the `.PHONY` line at the top to discover targets. Highlights:
 
 ```bash
+# Plugin composition
+make compose         # Regenerate .compiled/ from config/plugins.yaml + the registry
+make plugin-list     # Pretty-print the effective composed plugin set
+make plugin-add KEY=github     # Enable a non-core plugin in config/plugins.yaml
+make plugin-remove KEY=github  # Disable a plugin
+
 # Lifecycle
-make init            # Initialize the eleventy-site submodule
-make up              # Start services (core profile)
-make up-full         # Start services (full profile, activates redis profile)
+make init            # Initialize both submodules (theme + plugin-registry) + scripts deps
+make up              # Compose plugin set + start services
 make down            # Stop all services
 make logs            # Follow all logs
 make restart         # Restart all services
 make status          # Show service status
 
 # Build
-make build           # Rebuild images (no cache, core profile)
-make build-full      # Rebuild images (full profile)
+make build           # Compose plugin set + rebuild images (no cache)
 make update-theme    # Pull latest theme (requires make build after)
 
 # Shells
@@ -466,8 +467,8 @@ Requires `--expose-gc` on the watcher (set in entrypoint.sh) to enable GC hooks 
 
 As of AP plugin 2.2.0, the Fedify KV store and plugin cache use Redis instead of MongoDB's `ap_kv` collection. This prevents unbounded memory growth from the old `ap_kv` collection (~14K entries/day).
 
-- **Core profile:** Redis is optional (gated by `profiles: [redis]` in `docker-compose.yml`)
-- **Full profile:** Redis is **mandatory** — `docker-compose.full.yml` overrides the profile gate and sets `REDIS_URL=redis://redis:6379`
+- **ActivityPub disabled:** Redis is optional (gated by `profiles: [redis]` in `docker-compose.yml`)
+- **ActivityPub enabled:** Redis is **mandatory** — start it with `docker compose --profile redis up -d` and set `REDIS_URL=redis://redis:6379`
 
 Redis provides native TTL support so idempotence keys and cache entries auto-expire. The Fedify KV store uses `fedify::` key prefix, the plugin cache uses `indiekit:` key prefix.
 
